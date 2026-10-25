@@ -115,6 +115,10 @@ class ChatRequestFactory(
                 assistant = assistant,
                 model = model,
                 workspaceCwd = conversation.workspaceCwd,
+            ).sortedWith(
+                // 工具声明属于请求前缀，顺序必须稳定：MCP 工具来自服务端枚举，重连后顺序可能变化，
+                // 排序后前缀内容不变，才不会被当成一次声明改动而让提示词缓存失效。
+                compareBy({ it.name }, { it.description })
             ),
         )
     }

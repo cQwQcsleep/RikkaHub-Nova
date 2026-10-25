@@ -295,17 +295,18 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         params: TextGenerationParams,
     ): TextGenerationResult {
         val requestBody = buildMessageRequest(providerSetting, messages, params)
+        val requestBodyText = json.encodeToString(requestBody)
         val request = Request.Builder()
             .url("${providerSetting.baseUrl}/messages")
             .headers(providerSetting.mergeCustomHeaders(params.customHeaders))
-            .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
+            .post(requestBodyText.toRequestBody("application/json".toMediaType()))
             .addHeader("x-api-key", keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString()))
             .addHeader("anthropic-version", ANTHROPIC_VERSION)
             .configureReferHeaders(providerSetting.baseUrl)
             .configureSessionHeaders(providerSetting.baseUrl, params.sessionId)
             .build()
 
-        Log.i(TAG, "generateText: ${json.encodeToString(requestBody)}")
+        if (Log.isLoggable(TAG, Log.INFO)) Log.i(TAG, "generateText: $requestBodyText")
 
         val response = client.newCall(request).await()
         if (!response.isSuccessful) {
@@ -345,10 +346,11 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         params: TextGenerationParams,
     ): Flow<StreamChunk> = callbackFlow {
         val requestBody = buildMessageRequest(providerSetting, messages, params, stream = true)
+        val requestBodyText = json.encodeToString(requestBody)
         val request = Request.Builder()
             .url("${providerSetting.baseUrl}/messages")
             .headers(providerSetting.mergeCustomHeaders(params.customHeaders))
-            .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
+            .post(requestBodyText.toRequestBody("application/json".toMediaType()))
             .addHeader("x-api-key", keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString()))
             .addHeader("anthropic-version", ANTHROPIC_VERSION)
             .addHeader("Content-Type", "application/json")
@@ -356,10 +358,12 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             .configureSessionHeaders(providerSetting.baseUrl, params.sessionId)
             .build()
 
-        Log.i(TAG, "streamText: ${json.encodeToString(requestBody)}")
-
-        requestBody["messages"]!!.jsonArray.forEach {
-            Log.i(TAG, "streamText: $it")
+        if (Log.isLoggable(TAG, Log.INFO)) {
+            Log.i(TAG, "streamText: $requestBodyText")
+            // 整段历史逐条再打一遍只在排查请求组装时有用，默认级别下不要为它付出字符串开销
+            requestBody["messages"]!!.jsonArray.forEach {
+                Log.i(TAG, "streamText: $it")
+            }
         }
 
         val decoder = ClaudeStreamDecoder()
@@ -379,7 +383,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                 type: String?,
                 data: String
             ) {
-                Log.d(TAG, "onEvent: type=$type, data=$data")
+                if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, "onEvent: type=$type, data=$data")
                 try {
                     val result = decoder.accept(SseEvent(id = id, event = type, data = data))
                     sendChunks(result.chunks)

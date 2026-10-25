@@ -69,13 +69,28 @@ class StreamChunkHandler(private val model: Model? = null) {
     fun handle(messages: List<UIMessage>, chunk: StreamChunk): List<UIMessage> {
         require(messages.isNotEmpty()) { "messages must not be empty" }
 
-        val targetMessages = if (messages.last().role != MessageRole.ASSISTANT) {
-            messages + UIMessage(modelId = model?.id, role = MessageRole.ASSISTANT, parts = emptyList())
+        val last = messages.last()
+        return if (last.role == MessageRole.ASSISTANT) {
+            messages.dropLast(1) + apply(last, chunk)
         } else {
-            messages
+            messages + apply(
+                UIMessage(modelId = model?.id, role = MessageRole.ASSISTANT, parts = emptyList()),
+                chunk,
+            )
         }
-        val updatedMessage = append(targetMessages.last(), chunk)
-        return targetMessages.dropLast(1) + updatedMessage
+    }
+
+    /**
+     * 把 [chunk] 合并进一条助手消息。
+     *
+     * 流式生成每个事件都会调用一次；[handle] 需要为每个事件复制整个消息列表，调用方手里只有
+     * 末尾这一条消息时用这个方法，避免把 O(消息数) 的列表拷贝重复到每个 token 上。
+     */
+    fun apply(message: UIMessage, chunk: StreamChunk): UIMessage {
+        require(message.role == MessageRole.ASSISTANT) {
+            "message must be an assistant message"
+        }
+        return append(message, chunk)
     }
 
     private fun append(message: UIMessage, chunk: StreamChunk): UIMessage = with(message) {

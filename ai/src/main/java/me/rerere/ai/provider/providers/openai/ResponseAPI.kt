@@ -125,14 +125,15 @@ class ResponseAPI(
             params = params,
             stream = false,
         )
+        val requestBodyText = json.encodeToString(requestBody)
         val request = Request.Builder()
             .url(endpoint.url)
             .apply { endpoint.configureRequest(this) }
-            .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
+            .post(requestBodyText.toRequestBody("application/json".toMediaType()))
             .addHeader("Content-Type", "application/json")
             .build()
 
-        Log.i(TAG, "generateText: ${json.encodeToString(requestBody)}")
+        if (Log.isLoggable(TAG, Log.INFO)) Log.i(TAG, "generateText: $requestBodyText")
 
         // await() waits for the response headers; reading the body can still block.
         client.newCall(request).await().use { response ->
@@ -158,13 +159,14 @@ class ResponseAPI(
             params = params,
             stream = true,
         )
+        val requestBodyText = json.encodeToString(requestBody)
         val request = Request.Builder()
             .url(endpoint.url)
             .apply { endpoint.configureRequest(this) }
-            .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
+            .post(requestBodyText.toRequestBody("application/json".toMediaType()))
             .build()
 
-        Log.i(TAG, "streamText: ${json.encodeToString(requestBody)}")
+        if (Log.isLoggable(TAG, Log.INFO)) Log.i(TAG, "streamText: $requestBodyText")
 
         val decoder = ResponseApiStreamDecoder()
 
@@ -183,7 +185,7 @@ class ResponseAPI(
                 type: String?,
                 data: String
             ) {
-                Log.d(TAG, "onEvent: $id/$type $data")
+                if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, "onEvent: $id/$type $data")
                 try {
                     val result = decoder.accept(SseEvent(id = id, event = type, data = data))
                     sendChunks(result.chunks)

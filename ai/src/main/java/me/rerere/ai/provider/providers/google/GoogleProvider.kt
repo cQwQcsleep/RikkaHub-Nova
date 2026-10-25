@@ -252,20 +252,19 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             }
         ).newBuilder().addQueryParameter("alt", "sse").build()
 
+        val requestBodyText = json.encodeToString(requestBody)
         val request = transformRequest(
             providerSetting = providerSetting,
             request = Request.Builder()
                 .url(url)
                 .headers(providerSetting.mergeCustomHeaders(params.customHeaders))
                 .configureSessionHeaders(url.toString(), params.sessionId)
-                .post(
-                    json.encodeToString(requestBody).toRequestBody("application/json".toMediaType())
-                )
+                .post(requestBodyText.toRequestBody("application/json".toMediaType()))
                 .configureReferHeaders(providerSetting.baseUrl)
                 .build()
         )
 
-        Log.i(TAG, "streamText: ${json.encodeToString(requestBody)}")
+        if (Log.isLoggable(TAG, Log.INFO)) Log.i(TAG, "streamText: $requestBodyText")
 
         val responseId = Uuid.random().toString()
         val decoder = GoogleStreamDecoder(responseId, params.model.modelId)
@@ -285,7 +284,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                 type: String?,
                 data: String
             ) {
-                Log.i(TAG, "onEvent: $data")
+                if (Log.isLoggable(TAG, Log.DEBUG)) Log.i(TAG, "onEvent: $data")
 
                 try {
                     val result = decoder.accept(SseEvent(id = id, event = type, data = data))

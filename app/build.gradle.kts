@@ -106,6 +106,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    testOptions {
+        // 单元测试跑在 JVM 上，缓存诊断里的 Log.isLoggable 需要按默认值返回而不是抛 Stub 异常
+        unitTests.isReturnDefaultValues = true
+    }
     buildFeatures {
         compose = true
         buildConfig = true

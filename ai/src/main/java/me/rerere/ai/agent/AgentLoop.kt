@@ -116,7 +116,7 @@ internal class AgentLoop(
                 request.provider.streamText(request.providerSetting, messages, params).collect { chunk ->
                     try {
                         val mark = firstChunk ?: TimeSource.Monotonic.markNow().also { firstChunk = it }
-                        attempt = handler.handle(listOf(attempt), chunk).single()
+                        attempt = handler.apply(attempt, chunk)
                         preview(attempt.withStepStats(base, mark.elapsedNow()), newPartsFrom = base.parts.size)
                     } catch (e: CancellationException) {
                         throw e

@@ -89,17 +89,19 @@ class ChatCompletionsAPI(
                 params = params,
                 providerSetting = providerSetting
             )
+        // 正文只序列化一次：整段历史可能很大，重复序列化会把整段上下文再多编码一遍
+        val requestBodyText = json.encodeToString(requestBody)
 
         val request = Request.Builder()
             .url("${providerSetting.baseUrl}${providerSetting.chatCompletionsPath}")
             .headers(providerSetting.mergeCustomHeaders(params.customHeaders))
-            .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
+            .post(requestBodyText.toRequestBody("application/json".toMediaType()))
             .addHeader("Authorization", "Bearer ${keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString())}")
             .configureReferHeaders(providerSetting.baseUrl)
             .configureSessionHeaders(providerSetting.baseUrl, params.sessionId)
             .build()
 
-        Log.i(TAG, "generateText: ${json.encodeToString(requestBody)}")
+        if (Log.isLoggable(TAG, Log.INFO)) Log.i(TAG, "generateText: $requestBodyText")
 
         val response = client.newCall(request).await()
         if (!response.isSuccessful) {
@@ -141,18 +143,20 @@ class ChatCompletionsAPI(
             providerSetting = providerSetting,
             stream = true,
         )
+        // 整段历史只编码一次，日志与请求体共用同一份字符串
+        val requestBodyText = json.encodeToString(requestBody)
 
         val request = Request.Builder()
             .url("${providerSetting.baseUrl}${providerSetting.chatCompletionsPath}")
             .headers(providerSetting.mergeCustomHeaders(params.customHeaders))
-            .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
+            .post(requestBodyText.toRequestBody("application/json".toMediaType()))
             .addHeader("Authorization", "Bearer ${keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString())}")
             .addHeader("Content-Type", "application/json")
             .configureReferHeaders(providerSetting.baseUrl)
             .configureSessionHeaders(providerSetting.baseUrl, params.sessionId)
             .build()
 
-        Log.i(TAG, "streamText: ${json.encodeToString(requestBody)}")
+        if (Log.isLoggable(TAG, Log.INFO)) Log.i(TAG, "streamText: $requestBodyText")
 
         // just for debugging response body
         // println(client.newCall(request).await().body?.string())
@@ -174,7 +178,8 @@ class ChatCompletionsAPI(
                 type: String?,
                 data: String
             ) {
-                Log.d(TAG, "onEvent: $data")
+                // 每个 token 都会走到这里，日志参数必须惰性求值：即使不输出，$data 也会先拼出整串
+                if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, "onEvent: $data")
                 try {
                     val result = decoder.accept(SseEvent(id = id, event = type, data = data))
                     sendChunks(result.chunks)

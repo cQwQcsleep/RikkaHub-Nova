@@ -46,6 +46,7 @@ data class UsageTag(
 class UsageRecorder(
     private val dao: UsageRecordDAO,
     private val scope: CoroutineScope,
+    private val cacheObserver: PromptCacheObserver = PromptCacheObserver(),
 ) {
     fun <T : ProviderSetting> wrap(provider: Provider<T>, tag: UsageTag): Provider<T> =
         UsageRecordingProvider(provider, tag)
@@ -79,8 +80,14 @@ class UsageRecorder(
             providerSetting: T,
             messages: List<UIMessage>,
             params: TextGenerationParams,
-        ): TextGenerationResult = delegate.generateText(providerSetting, messages, params).also { result ->
-            result.usage?.let { record(tag, providerSetting, params, it) }
+        ): TextGenerationResult {
+            val pending = cacheObserver.begin(providerSetting, params, messages, params.tools, tag)
+            return delegate.generateText(providerSetting, messages, params).also { result ->
+                result.usage?.let { usage ->
+                    cacheObserver.complete(pending, usage)
+                    record(tag, providerSetting, params, usage)
+                }
+            }
         }
 
         override suspend fun streamText(
@@ -90,6 +97,8 @@ class UsageRecorder(
         ): Flow<StreamChunk> {
             val upstream = delegate.streamText(providerSetting, messages, params)
             return flow {
+                // 形状在请求真正发出前捕获；上游是冷流，放在 flow 内部才能与实际发送的请求对齐
+                val pending = cacheObserver.begin(providerSetting, params, messages, params.tools, tag)
                 // 同一次请求里的 usage 是逐步更新的快照，按 merge 合并；中途取消或出错时已经产生的用量也要记下
                 var usage: TokenUsage? = null
                 try {
@@ -98,7 +107,10 @@ class UsageRecorder(
                         emit(chunk)
                     }
                 } finally {
-                    usage?.let { record(tag, providerSetting, params, it) }
+                    usage?.let {
+                        cacheObserver.complete(pending, it)
+                        record(tag, providerSetting, params, it)
+                    }
                 }
             }
         }

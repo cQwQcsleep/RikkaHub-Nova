@@ -1,0 +1,64 @@
+name: Nova CI
+
+# 第三方分支的编译验证：只做编译与单元测试，不发布产物。
+# 上游的 daily-build.yml 依赖签名与 Firebase 密钥，fork 里没有这些 secret，
+# 因此这里用 ci/google-services.json 作为仅编译用的占位配置。
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: nova-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # web 模块的 preBuild 会执行 pnpm run build 构建前端
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install web-ui dependencies
+        working-directory: web-ui
+        run: pnpm install --frozen-lockfile
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Provide compile-only Firebase config
+        run: cp ci/google-services.json app/google-services.json
+
+      - name: Unit tests
+        run: ./gradlew :ai:testDebugUnitTest :app:testGithubDebugUnitTest --stacktrace
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleGithubDebug --stacktrace

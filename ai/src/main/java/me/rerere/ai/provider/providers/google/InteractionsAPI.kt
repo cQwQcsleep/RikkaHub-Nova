@@ -107,7 +107,7 @@ internal class InteractionsAPI(
         val requestBody = buildRequestBody(messages, params, stream = true)
         val request = buildRequest(providerSetting, params, requestBody)
 
-        Log.i(TAG, "streamText: ${json.encodeToString(requestBody)}")
+        if (Log.isLoggable(TAG, Log.INFO)) Log.i(TAG, "streamText: ${json.encodeToString(requestBody)}")
 
         val decoder = InteractionsStreamDecoder(fallbackModel = params.model.modelId)
 
@@ -126,7 +126,7 @@ internal class InteractionsAPI(
                 type: String?,
                 data: String
             ) {
-                Log.d(TAG, "onEvent: $id/$type $data")
+                if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, "onEvent: $id/$type $data")
                 try {
                     val result = decoder.accept(SseEvent(id = id, event = type, data = data))
                     sendChunks(result.chunks)
