@@ -47,7 +47,8 @@ class PromptCacheObserverTest {
 
         val observation = requireNotNull(observer.lastObservation)
         assertFalse(observation.prefixChanged)
-        assertEquals(2, observation.carriedMessages)
+        // 第一条请求只带了 hello，第二条在它后面追加 next，共同携带的是 1 条正文消息
+        assertEquals(1, observation.carriedMessages)
     }
 
     @Test
