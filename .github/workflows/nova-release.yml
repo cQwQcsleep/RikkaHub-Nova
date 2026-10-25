@@ -1,0 +1,123 @@
+name: Nova Release
+
+# 构建可安装的 release APK 并发布到 GitHub Releases。
+# fork 里没有上游的签名密钥，这里在 CI 中生成一次性自签名 keystore；
+# 用它签出的 APK 可以正常安装、升级（覆盖安装需要同一密钥），但不能上架应用商店。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag（留空使用 v<versionName>-nova.<run_number>）'
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'nova-*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nova-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install web-ui dependencies
+        working-directory: web-ui
+        run: pnpm install --frozen-lockfile
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-release-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION_NAME=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -1)
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
+      # 生成一次性签名密钥；local.properties 的 storeFile 相对于 app 模块目录
+      - name: Generate signing key
+        run: |
+          keytool -genkeypair -v \
+            -keystore app/nova-release.jks \
+            -alias nova \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "${{ github.run_id }}nova" \
+            -keypass "${{ github.run_id }}nova" \
+            -dname "CN=Nova RikkaHub Fork, OU=CI, O=Nova, L=NA, S=NA, C=NA"
+          cat > local.properties <<EOF
+          storeFile=nova-release.jks
+          storePassword=${{ github.run_id }}nova
+          keyAlias=nova
+          keyPassword=${{ github.run_id }}nova
+          EOF
+
+      - name: Provide compile-only Firebase config
+        run: cp ci/google-services.json app/google-services.json
+
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleGithubRelease --stacktrace
+
+      - name: Collect artifacts
+        id: artifacts
+        run: |
+          ls -lh app/build/outputs/apk/github/release/
+          echo "apk_dir=app/build/outputs/apk/github/release" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v${{ steps.version.outputs.name }}-nova.${{ github.run_number }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Nova ${{ steps.version.outputs.name }} (${{ steps.tag.outputs.tag }})
+          prerelease: true
+          body: |
+            RikkaHub Nova 第三方分支构建（commit `${{ github.sha }}`）。
+
+            - APK 由 CI 用一次性自签名密钥签名，可直接安装
+            - `universal` 为全 ABI 包，其余按 ABI 拆分
+            - 缓存诊断与性能改动见仓库 README
+          files: app/build/outputs/apk/github/release/*.apk
