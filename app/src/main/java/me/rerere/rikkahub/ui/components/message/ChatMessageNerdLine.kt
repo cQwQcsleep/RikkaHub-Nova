@@ -362,7 +362,8 @@ private fun UIMessage.nerdStats(usage: TokenUsage?, live: Boolean): NerdStats {
         }
         // 约 4 字符 1 token；中英混排也接近，只用于生成过程中的实时反馈
         val estimatedTokens = (chars / 4f).toInt().coerceAtLeast(if (chars > 0) 1 else 0)
-        val duration = generationTimeMs?.takeIf { it > 0 }
+        // 刚起步时耗时太短，速度会被放大成离谱的数字，满 200ms 再显示
+        val duration = generationTimeMs?.takeIf { it >= 200 }
         return NerdStats(
             total = usage ?: TokenUsage(),
             lastUsage = last,
