@@ -1,7 +1,6 @@
 package me.rerere.ai.cache
 
 import java.net.URI
-import java.util.concurrent.TimeUnit
 
 /**
  * 厂商前缀缓存的保留时长策略。
@@ -11,8 +10,9 @@ import java.util.concurrent.TimeUnit
  * 并在命中时把原因归错，偏大只会错过一次冷启动判定，所以这里刻意保守。
  */
 object PromptCachePolicy {
-    const val DEFAULT_TTL_MILLIS: Long = TimeUnit.HOURS.toMillis(24)
-    const val SHORT_TTL_MILLIS: Long = TimeUnit.MINUTES.toMillis(5)
+    // 24 小时 / 5 分钟，写成字面量才能作为 const 常量
+    const val DEFAULT_TTL_MILLIS: Long = 24L * 60 * 60 * 1000
+    const val SHORT_TTL_MILLIS: Long = 5L * 60 * 1000
 
     fun vendorOf(baseUrl: String?): String {
         val host = hostOf(baseUrl) ?: return ""
