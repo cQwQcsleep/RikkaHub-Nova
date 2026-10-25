@@ -148,7 +148,8 @@ class PromptCacheLedgerTest {
 
         assertTrue(result.prefixChanged)
         assertEquals(listOf(PromptCacheLedger.REASON_BODY), result.reasons)
-        assertEquals(1, result.carriedMessages)
+        // carried 是两次请求共同发送的消息条数，不是内容仍然相同的条数
+        assertEquals(2, result.carriedMessages)
     }
 
     @Test

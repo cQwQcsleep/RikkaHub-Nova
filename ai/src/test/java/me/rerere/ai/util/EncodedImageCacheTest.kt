@@ -40,9 +40,9 @@ class EncodedImageCacheTest {
         cache.put("a", image(10))
         cache.put("b", image(80))
 
-        // 若旧条目没有被扣减，放入 b 后会因为总重量 170 而把 b 自己淘汰掉
+        // 若旧条目没有被扣减，总重量会变成 160 而提前淘汰掉刚放入的 b
         assertEquals(80, cache.get("b")?.base64?.length)
-        assertNull(cache.get("a"))
+        assertEquals(10, cache.get("a")?.base64?.length)
     }
 
     @Test
