@@ -838,10 +838,18 @@ class ChatService(
      */
     private suspend fun autoCompactIfNeeded(session: ConversationSession, settings: Settings) {
         val conversation = session.state.value
+        val assistant = settings.getAssistantOf(conversation)
+        if (!assistant.autoCompact) return
         val model = settings.getChatModelOf(conversation) ?: return
         val promptTokens = conversation.currentMessages.lastOrNull()
             ?.lastRequestUsage()?.promptTokens ?: return
-        if (!ContextCompactionPolicy.shouldCompact(promptTokens, model.contextLength)) return
+        // 阈值：自定义值需落在 [1000, 窗口 85%) 之间，否则由容量保护接管；窗口未知则不自动压缩
+        if (!ContextCompactionPolicy.shouldCompact(
+                promptTokens = promptTokens,
+                contextLength = model.contextLength,
+                thresholdTokens = assistant.compactThresholdTokens,
+            )
+        ) return
         // 刚开聊就触发折叠没有意义，也容易在短对话里误插检查点
         val nodes = conversation.messageNodes
         val checkpointIndex = nodes.indexOfLast { it.currentMessage.isContextCheckpoint }

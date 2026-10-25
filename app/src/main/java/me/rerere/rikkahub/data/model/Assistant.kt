@@ -26,6 +26,10 @@ data class Assistant(
     val topP: Float? = null,
     // 上下文消息条数上限, 超出后阶梯式截断; 0 表示不限制
     val contextMessageLimit: Int = 0,
+    // 接近模型上下文窗口时自动压缩历史（阈值与保留区策略同 Reasonix）
+    val autoCompact: Boolean = true,
+    // 自定义压缩阈值（tokens）；0 表示跟随模型容量（窗口的 85%）。小于 1000 视为无效
+    val compactThresholdTokens: Int = 0,
     val streamOutput: Boolean = true,
     val enableMemory: Boolean = false,
     val useGlobalMemory: Boolean = false, // 使用全局共享记忆而非助手隔离记忆

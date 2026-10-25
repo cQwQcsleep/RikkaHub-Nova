@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -15,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ai.provider.ModelType
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.data.ai.ContextCompactionPolicy
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.ui.components.ai.ModelField
@@ -439,6 +442,153 @@ internal fun AssistantBasicContent(
                         }
                     }
                 )
+            }
+        }
+
+        // 上下文压缩：阈值与容量保护与 Reasonix 一致
+        val compactModel = remember(assistant.chatModelId, providers) {
+            assistant.chatModelId?.let { id ->
+                providers.flatMap { it.models }.find { it.id == id }
+            }
+        }
+        val compactWindow = compactModel?.contextLength?.takeIf { it > 0 } ?: 0
+        val compactCapacity = ContextCompactionPolicy.capacityTokens(compactWindow)
+
+        CardGroup(title = { Text(stringResource(R.string.assistant_page_compact_title)) }) {
+            switchItem(
+                checked = assistant.autoCompact,
+                onCheckedChange = { onUpdate(assistant.copy(autoCompact = it)) },
+                supportingContent = { Text(stringResource(R.string.assistant_page_compact_auto_desc)) },
+                headlineContent = { Text(stringResource(R.string.assistant_page_compact_auto)) },
+            )
+
+            if (assistant.autoCompact) {
+                formItem(
+                    headlineContent = { Text(stringResource(R.string.assistant_page_compact_policy)) },
+                    supportingContent = { Text(stringResource(R.string.assistant_page_compact_policy_desc)) },
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = assistant.compactThresholdTokens <= 0,
+                            onClick = { onUpdate(assistant.copy(compactThresholdTokens = 0)) },
+                            label = { Text(stringResource(R.string.assistant_page_compact_policy_capacity)) },
+                        )
+                        FilterChip(
+                            selected = assistant.compactThresholdTokens > 0,
+                            onClick = {
+                                if (assistant.compactThresholdTokens <= 0) {
+                                    // 切到自定义时先给一个有效起点，用户再改成具体值
+                                    onUpdate(
+                                        assistant.copy(
+                                            compactThresholdTokens = compactCapacity
+                                                .takeIf { it > ContextCompactionPolicy.MIN_THRESHOLD_TOKENS }
+                                                ?: 50_000
+                                        )
+                                    )
+                                }
+                            },
+                            label = { Text(stringResource(R.string.assistant_page_compact_policy_custom)) },
+                        )
+                    }
+                }
+
+                if (assistant.compactThresholdTokens > 0) {
+                    formItem(
+                        headlineContent = { Text(stringResource(R.string.assistant_page_compact_threshold)) },
+                        supportingContent = {
+                            Text(
+                                if (compactCapacity > 0) {
+                                    stringResource(
+                                        R.string.assistant_page_compact_threshold_desc_known,
+                                        ContextCompactionPolicy.capacityTokens(compactWindow),
+                                    )
+                                } else {
+                                    stringResource(R.string.assistant_page_compact_threshold_desc)
+                                }
+                            )
+                        },
+                    ) {
+                        val focusManager = LocalFocusManager.current
+                        var thresholdInput by remember(assistant.id, assistant.compactThresholdTokens) {
+                            mutableStateOf(assistant.compactThresholdTokens.toString())
+                        }
+                        fun commitThreshold() {
+                            val value = thresholdInput.toIntOrNull()
+                                ?.takeIf { it >= ContextCompactionPolicy.MIN_THRESHOLD_TOKENS }
+                                ?: assistant.compactThresholdTokens
+                            thresholdInput = value.toString()
+                            if (value != assistant.compactThresholdTokens) {
+                                onUpdate(assistant.copy(compactThresholdTokens = value))
+                            }
+                        }
+                        OutlinedTextField(
+                            value = thresholdInput,
+                            onValueChange = { input -> thresholdInput = input.filter(Char::isDigit) },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(onDone = {
+                                commitThreshold()
+                                focusManager.clearFocus()
+                            }),
+                            singleLine = true,
+                            suffix = { Text("tokens") },
+                            supportingText = {
+                                if (thresholdInput.toIntOrNull()?.let {
+                                        it < ContextCompactionPolicy.MIN_THRESHOLD_TOKENS
+                                    } == true
+                                ) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.assistant_page_compact_threshold_invalid,
+                                            ContextCompactionPolicy.MIN_THRESHOLD_TOKENS,
+                                        ),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            },
+                        )
+                        if (compactCapacity > 0) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf(0.5f, 0.7f, 0.85f).forEach { ratio ->
+                                    val value = (compactWindow * ratio / 1000).toInt() * 1000
+                                    FilterChip(
+                                        selected = assistant.compactThresholdTokens == value,
+                                        onClick = {
+                                            onUpdate(assistant.copy(compactThresholdTokens = value))
+                                            thresholdInput = value.toString()
+                                        },
+                                        label = { Text("${(ratio * 100).roundToInt()}%") },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item(
+                    headlineContent = { Text(stringResource(R.string.assistant_page_compact_capacity)) },
+                    supportingContent = {
+                        Text(stringResource(R.string.assistant_page_compact_capacity_desc))
+                    },
+                    trailingContent = {
+                        if (compactCapacity > 0) {
+                            Text(
+                                text = "${compactCapacity / 1000}k",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                    },
+                )
+
+                if (compactWindow == 0) {
+                    item(
+                        headlineContent = { Text(stringResource(R.string.assistant_page_compact_no_window)) },
+                        supportingContent = { Text(stringResource(R.string.assistant_page_compact_no_window_desc)) },
+                    )
+                }
             }
         }
 

@@ -29,6 +29,45 @@ class ContextCompactionPolicyTest {
     }
 
     @Test
+    fun `custom threshold is capped by the capacity guard`() {
+        // 默认跟随容量
+        assertEquals(85_000, ContextCompactionPolicy.triggerTokens(100_000, 0))
+        // 有效的自定义阈值
+        assertEquals(40_000, ContextCompactionPolicy.triggerTokens(100_000, 40_000))
+        // 超过容量保护时由容量接管
+        assertEquals(85_000, ContextCompactionPolicy.triggerTokens(100_000, 90_000))
+        // 小于 1000 视为无效
+        assertEquals(85_000, ContextCompactionPolicy.triggerTokens(100_000, 500))
+        // 窗口未知时没有阈值
+        assertEquals(0, ContextCompactionPolicy.triggerTokens(0, 5_000))
+    }
+
+    @Test
+    fun `disabled compaction or unknown window never fires`() {
+        assertFalse(
+            ContextCompactionPolicy.shouldCompact(
+                promptTokens = 90_000,
+                contextLength = 100_000,
+                enabled = false,
+            )
+        )
+        assertFalse(
+            ContextCompactionPolicy.shouldCompact(
+                promptTokens = 90_000,
+                contextLength = 0,
+                thresholdTokens = 5_000,
+            )
+        )
+        assertTrue(
+            ContextCompactionPolicy.shouldCompact(
+                promptTokens = 41_000,
+                contextLength = 100_000,
+                thresholdTokens = 40_000,
+            )
+        )
+    }
+
+    @Test
     fun `recent tail stops at ten percent of the window`() {
         // 每条约 1008 token，窗口 100k → 预算 10k，保留 9 条后下一条会超预算
         val messages = List(30) { message(4_000) }

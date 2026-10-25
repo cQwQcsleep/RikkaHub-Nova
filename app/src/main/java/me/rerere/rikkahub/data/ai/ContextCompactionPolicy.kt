@@ -25,12 +25,49 @@ object ContextCompactionPolicy {
     /** 估算 token 用的字符换算；Reasonix 在拿到真实 usage 前也用 0.25（约 4 字符 1 token） */
     const val TOKENS_PER_CHAR = 0.25f
 
+    /** 自定义阈值的最小值，低于它视为无效，回落到容量保护 */
+    const val MIN_THRESHOLD_TOKENS = 1_000
+
     /** 每条消息的固定开销，覆盖角色、分隔符等协议字段 */
     private const val MESSAGE_OVERHEAD_TOKENS = 8
 
-    fun shouldCompact(promptTokens: Int, contextLength: Int): Boolean {
-        if (contextLength <= 0 || promptTokens <= 0) return false
-        return promptTokens >= (contextLength * TRIGGER_RATIO).toInt()
+    /** 容量保护阈值：模型窗口的 85% */
+    fun capacityTokens(contextLength: Int): Int =
+        if (contextLength <= 0) 0 else (contextLength * TRIGGER_RATIO).toInt()
+
+    /**
+     * 实际生效的触发阈值。
+     *
+     * 自定义阈值必须落在 [1000, 容量保护) 之间，否则像 Reasonix 一样由容量保护接管：
+     * 太小没有意义，太大会让请求先超出窗口。
+     */
+    fun triggerTokens(contextLength: Int, thresholdTokens: Int = 0): Int =
+        if (contextLength <= 0) {
+            0
+        } else {
+            val capacity = capacityTokens(contextLength)
+            if (thresholdTokens >= MIN_THRESHOLD_TOKENS && thresholdTokens < capacity) {
+                thresholdTokens
+            } else {
+                capacity
+            }
+        }
+
+    /**
+     * 是否应该自动压缩。
+     *
+     * [enabled] 对应助手的自动压缩开关；[contextLength] 为 0 表示模型没有声明窗口，
+     * 此时不自动压缩（与 Reasonix 的「未声明窗口 → 不自动整理」一致）。
+     */
+    fun shouldCompact(
+        promptTokens: Int,
+        contextLength: Int,
+        thresholdTokens: Int = 0,
+        enabled: Boolean = true,
+    ): Boolean {
+        if (!enabled || promptTokens <= 0) return false
+        val trigger = triggerTokens(contextLength, thresholdTokens)
+        return trigger > 0 && promptTokens >= trigger
     }
 
     /** 按预算估算一条消息占用的 token */
