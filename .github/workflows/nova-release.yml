@@ -115,7 +115,8 @@ jobs:
         run: |
           TAG="${{ inputs.tag }}"
           if [ -z "$TAG" ]; then
-            TAG="v${{ steps.version.outputs.name }}-nova.${{ github.run_number }}"
+            # versionName 已经带分支后缀（如 3.1.1-nova.3），直接作为 tag
+            TAG="v${{ steps.version.outputs.name }}"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 

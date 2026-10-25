@@ -11,13 +11,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -49,10 +55,24 @@ fun MeshGradientBackground(
         label = label,
     )
     // 针对各自身上的乘数，传入消除小数所需的最小公倍数圈数
-    val p1 by phase(5_500, loops = 20, "p1") // 1.15 对应 20 圈 (总长 110秒)
-    val p2 by phase(7_000, loops = 1,  "p2") // 1.0  对应 1 圈
-    val p3 by phase(8_500, loops = 10, "p3") // 0.9  对应 10 圈 (总长 85秒)
-    val p4 by phase(6_200, loops = 10, "p4") // 1.1  对应 10 圈 (总长 62秒)
+    val phase1 = phase(5_500, loops = 20, "p1") // 1.15 对应 20 圈 (总长 110秒)
+    val phase2 = phase(7_000, loops = 1,  "p2") // 1.0  对应 1 圈
+    val phase3 = phase(8_500, loops = 10, "p3") // 0.9  对应 10 圈 (总长 85秒)
+    val phase4 = phase(6_200, loops = 10, "p4") // 1.1  对应 10 圈 (总长 62秒)
+
+    // 光斑一轮漂移要几十秒，逐帧重绘四个全屏径向渐变非常耗电。
+    // 以 20fps 采样动画值，肉眼与 60fps 无差别，绘制开销降到三分之一。
+    var phases by remember { mutableStateOf(floatArrayOf(0f, 0f, 0f, 0f)) }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            phases = floatArrayOf(phase1.value, phase2.value, phase3.value, phase4.value)
+            delay(50)
+        }
+    }
+    val p1 = phases[0]
+    val p2 = phases[1]
+    val p3 = phases[2]
+    val p4 = phases[3]
 
     val dark = LocalDarkMode.current
     val baseGradient = if (dark) {

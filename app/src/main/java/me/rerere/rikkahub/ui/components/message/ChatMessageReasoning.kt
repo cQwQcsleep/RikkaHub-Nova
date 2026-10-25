@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Size
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.isActive
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessagePart
@@ -93,18 +95,34 @@ private fun rememberReasoningState(reasoning: UIMessagePart.Reasoning): Pair<Rea
         )
     }
 
-    LaunchedEffect(reasoning.reasoning, loading) {
+    val showThinkingContent = settings.displaySetting.showThinkingContent
+    val autoCloseThinking = settings.displaySetting.autoCloseThinking
+
+    // 只在开始/结束生成时切换卡片状态；不能把 reasoning 文本作为 key，
+    // 否则每个 token 都会取消并重启这个 effect
+    LaunchedEffect(loading) {
         if (loading) {
-            if (!state.expandState.expanded && settings.displaySetting.showThinkingContent)
+            if (!state.expandState.expanded && showThinkingContent) {
                 state.expandState = ReasoningCardState.Preview
-            scrollState.animateScrollTo(scrollState.maxValue)
-        } else {
-            if (state.expandState.expanded) {
-                state.expandState = if (settings.displaySetting.autoCloseThinking)
-                    ReasoningCardState.Collapsed
-                else
-                    ReasoningCardState.Expanded
             }
+        } else {
+            state.duration = reasoning.finishedAt?.let { it - reasoning.createdAt } ?: state.duration
+            if (state.expandState.expanded) {
+                state.expandState = if (autoCloseThinking) {
+                    ReasoningCardState.Collapsed
+                } else {
+                    ReasoningCardState.Expanded
+                }
+            }
+        }
+    }
+
+    // 流式时跟随最新内容。布局变化用 conflate 合并，并且直接贴底而不是每帧重启动一个滚动动画
+    if (loading) {
+        LaunchedEffect(scrollState) {
+            snapshotFlow { scrollState.maxValue }
+                .conflate()
+                .collect { scrollState.scrollTo(it) }
         }
     }
 
@@ -112,7 +130,7 @@ private fun rememberReasoningState(reasoning: UIMessagePart.Reasoning): Pair<Rea
         if (loading) {
             while (isActive) {
                 state.duration = (reasoning.finishedAt ?: Clock.System.now()) - reasoning.createdAt
-                delay(50)
+                delay(100)
             }
         }
     }

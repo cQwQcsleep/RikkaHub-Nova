@@ -6,6 +6,16 @@
   <string name="about_page_title">About</string>
   <string name="about_page_version">Version</string>
   <string name="about_page_website">Website</string>
+  <string name="about_page_fork_title">This fork</string>
+  <string name="about_page_fork_subtitle">Nova · third-party fork</string>
+  <string name="about_page_branch_repo">Nova repository</string>
+  <string name="about_page_upstream_repo">Upstream project</string>
+  <string name="about_page_authors">Authors</string>
+  <string name="about_page_author_upstream">Original author</string>
+  <string name="about_page_author_fork">Fork maintainer</string>
+  <string name="about_page_fork_diff_title">Differences from upstream</string>
+  <string name="about_page_fork_diff">• Prompt-cache diagnostics: every request records the shape of its prefix (system, tool declarations, message chain) and explains cache misses and cold resumes.\n• Cache-stable prefixes: tool declarations are sorted so MCP reconnects no longer invalidate the provider cache.\n• Performance: streaming hot paths avoid per-token log strings and list copies, repeated image/document encoding is cached, and reasoning/scroll animations no longer restart on every token.\n• No Firebase: analytics and crash reporting are removed, so no google-services.json is needed.</string>
+  <string name="about_page_fork_note">Nova is an independent third-party fork. Please report fork issues to the fork repository, not upstream.</string>
   <string name="add">Add</string>
   <string name="app_name">RikkaHub</string>
   <string name="asr_button_content_description">Speech Recognition</string>
@@ -846,7 +856,7 @@
   <string name="setting_page_documentation">Documentation</string>
   <string name="setting_page_documentation_desc">View app usage instructions and help documentation</string>
   <string name="setting_page_donate">Donate</string>
-  <string name="setting_page_donate_desc">If you like it, sponsor the author\'s work</string>
+  <string name="setting_page_donate_desc">If you like this fork, please support the original author\'s work~</string>
   <string name="setting_page_dynamic_color">Dynamic Color</string>
   <string name="setting_page_dynamic_color_desc">Generate the app theme colors dynamically from your wallpaper</string>
   <string name="setting_page_extensions">Extensions</string>
@@ -875,7 +885,7 @@
   <string name="setting_page_search_title">Search Service</string>
   <string name="setting_page_share">Share</string>
   <string name="setting_page_share_desc">Share this app with friends</string>
-  <string name="setting_page_share_text">RikkaHub - Open Source Android AI Assistant\n\nWebsite: https://rikka-ai.com/</string>
+  <string name="setting_page_share_text">RikkaHub Nova - Open Source Android AI Assistant (third-party fork of RikkaHub)\n\nRepository: https://github.com/cQwQcsleep/RikkaHub-Nova</string>
   <string name="setting_page_sponsor_alert_confirm">Donate</string>
   <string name="setting_page_sponsor_alert_desc">You have launched the app over 100 times! If you enjoy using it, please consider supporting the developer.</string>
   <string name="setting_page_sponsor_alert_dismiss">Not Now</string>
@@ -1625,6 +1635,7 @@
   <string name="chat_message_usage_total_output">Total output</string>
   <string name="chat_message_usage_speed">Speed</string>
   <string name="chat_message_usage_duration">Duration</string>
+  <string name="chat_message_usage_cache_rate">Cache hit</string>
   <string name="stats_page_usage_title">Token usage</string>
   <string name="stats_page_range_7d">7 days</string>
   <string name="stats_page_range_30d">30 days</string>

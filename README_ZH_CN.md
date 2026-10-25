@@ -1,99 +1,161 @@
 <div align="center">
-  <img src="docs/icon.png" alt="App 图标" width="100" />
-  <h1>RikkaHub</h1>
+  <img src="docs/icon.png" alt="App Icon" width="100" />
+  <h1>RikkaHub Nova</h1>
 
-一个原生Android LLM 聊天客户端，支持切换不同的供应商进行聊天 🤖💬
+原生安卓 LLM 聊天客户端，基于 [RikkaHub](https://github.com/rikkahub/rikkahub) 的第三方分支。
 
-[English](README.md) | [繁體中文](README_ZH_TW.md) | 简体中文
+原版作者：**Reovo / rikkahub** · 分支维护：**cQwQcsleep**
 
-点击链接加入群聊 👉 [【RikkaHub】](https://qm.qq.com/q/I8MSU0FkOu)
-
+[English](README.md) | 简体中文
 </div>
 
 <div align="center">
   <img src="docs/img/poster.png" alt="RikkaHub" width="800" />
 </div>
 
+## 🧬 这个分支改了什么
+
+Nova 保留上游的界面与行为，重点优化提示词缓存与流式输出的开销。
+
+| 方向 | 改动 |
+|---|---|
+| 提示词缓存 | 每次请求记录前缀形状（系统提示、工具声明、逐条消息链），并与同一会话的上一条请求对比。厂商返回的 usage 仍是命中量的唯一依据，形状只负责解释「为什么没命中」（`system` / `tools` / `body` / `trim`），以及长时间未请求后的冷启动（DeepSeek 24 小时，DashScope / Anthropic 5 分钟）。 |
+| 前缀稳定 | 工具声明按名称排序后再发送，MCP 服务重连后枚举顺序变化不会再让厂商缓存整体失效。 |
+| 流式热路径 | 请求体只序列化一次；日志字符串只在对应级别打开时拼接；合并流式分片时不再逐 token 复制整个消息列表。 |
+| 思维链解析 | 开头的 `<think>` 块改为线性扫描，替代每个 token 都重扫全文的惰性正则。 |
+| 重复编码 | 图片编码结果与文档解析结果按文件标识做有界 LRU 缓存，历史图片/PDF 不再每次请求重新解码。 |
+| 界面开销 | 流式生成时不再逐 token 重启内容尺寸动画；思维链预览用 conflate 合并布局变化后贴底，不再每个 token 重启滚动动画；自动跟随滚动做了限频；动态渐变背景以 20fps 采样。 |
+| 数据显示 | token 速度改用口径一致的字段计算（多步累计），新增缓存命中率，速度与时长按数量级自适应格式。 |
+| 移除 Firebase | 不再包含统计与崩溃上报，自行构建的分支不再需要 `google-services.json`。 |
+| 关于页 | 增加分支标识、两位作者、本仓库与原版的链接，以及本分支与原版的区别列表。 |
+
+本分支的问题请反馈到本仓库，不要提交给上游。
 
 ## 🚀 下载
 
-🔗 [前往官网下载](https://rikka-ai.com/download)（推荐）
+- Releases：<https://github.com/cQwQcsleep/RikkaHub-Nova/releases>
+- `app-github-universal-release.apk` 适配所有受支持的 ABI，`arm64-v8a` / `x86_64` 体积更小。
+- APK 使用分支固定的 CI 密钥签名，后续 Nova 版本可以直接覆盖安装。
+- `app-github-universal-debug.apk` 未混淆、包名带 `.debug`，可与正式包共存，用于排查只有 R8 包才会出现的问题。
 
-🔗 [前往 Google Play 下载](https://play.google.com/store/apps/details?id=me.rerere.rikkahub)
+## ✨ 功能（继承自上游）
 
-> [!WARNING]
-> RikkaHub 存在许多 fork 版本，fork 版本出现问题与 RikkaHub 无关，请谨慎使用 fork 版本，避免隐私泄露或者过度索要权限问题。
+- Material 3 Expressive 设计、深色模式、动态取色
+- 多提供商：任意 OpenAI / Anthropic / Google 兼容接口，可自定义请求头与请求体
+- 多模态输入（图片、文本文档、PDF、DOCX）、媒体生成
+- MCP、技能、本地工作区（proot Linux shell）、网页访问
+- Markdown 渲染（代码高亮、LaTeX、表格、Mermaid）
+- 搜索服务（Exa、Tavily、智谱、LinkUp、Brave、Perplexity、SearXNG 等）
+- 助手定制、文件式记忆、AI 翻译、SillyTavern 角色卡
 
-## 💖 赞助商
+## 🛠 从源码构建
 
-| 赞助商 | 介绍 |
-|:---:|:---|
-| <img src="docs/sponsors/aihubmix.png" alt="Aihubmix" width="50" /><br /><b>Aihubmix</b> | 感谢 <a href="https://aihubmix.com?aff=pG7r">aihubmix.com</a> 的资金支持。我们推荐使用 aihubmix 作为全球主流模型的一站式服务平台。（OpenAI、Claude、Google Gemini、DeepSeek、Qwen 以及数百种其他模型）。 |
-| <img src="docs/sponsors/api-mart.png" alt="APIMart" width="50" /><br /><b><a href="https://go.apimart.ai/gh-rikkahub">APIMart</a></b> | 感谢 APIMart 赞助了本项目！APIMart 是专注 AI 图片/视频生成的低价 API 平台，GPT-Image-2 低至 $0.006/张，1 美元可出图 160+ 张。图片、视频一套异步 API 通吃，提交任务拿 ID、回调取结果，跑批万张不超时、换模型不改代码。按量付费、无月费，通过<a href="https://go.apimart.ai/gh-rikkahub">此注册链接</a>注册即可开用。 |
-| <img src="docs/sponsors/suixiang.jpg" alt="随想AI中转" width="50" /><br /><b><a href="https://sui-xiang.com">随想AI中转</a></b> | 感谢<a href="https://sui-xiang.com">随想AI中转</a>对本项目的赞助！随想AI中转 是一家可靠高效的 API 中继服务提供商，提供 Claude、Codex、Gemini 等的中继服务。注重隐私的中转站·无数据倒卖·无模型掺水，隐私，透明，极速售后。新账户注册每日签到就送 0.5 元测试额度，充值额度 1:1，无需订阅，按量付费。多线路冗余、跨区域容灾、自动故障切换，长链路 SSE 不中断。99.9% 可用性，关键调用从不掉队。 |
-| <img src="docs/sponsors/ztest.png" alt="真测 ztest.ai" width="50" /><br /><b><a href="https://ztest.ai">真测 ztest.ai</a></b> | 感谢<a href="https://ztest.ai">真测 ztest.ai</a>对本项目的赞助！真测 ztest.ai 是一个 AI 中转站模型检测平台，检测结果数据全公开，23 项探针覆盖协议、身份、能力、内容完整性、安全性、性能六大维度，交叉印证识别伪造与降级。作为独立第三方验证平台，实时监测 AI 中转站的模型真实性、响应质量与服务可用性。 |
-| <img src="docs/sponsors/maru.png" alt="MaruCode" width="50" /><br /><b><a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">MaruCode</a></b> | <b><a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">MaruCode</a></b> 是一家偶尔做做慈善的小破站 API，自营号池，主要提供 Codex、Claude Code、GPT Image 等主流模型，支持 Websocket 协议，明码标价(Codex 0.25x, CC 1.5x)，透明汇率(1:1)，<a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">新用户注册送 2 刀</a>。<a href="https://images-2.muteki.site">生图工作台🖼️</a> |
-| <img src="docs/sponsors/naapi.png" alt="钠API" width="50" /><br /><b><a href="https://naapi.cc/register?aff=rikkahub">钠API</a></b> | 感谢<a href="https://naapi.cc/register?aff=rikkahub">钠API</a>对本项目的赞助！钠API（naapi.cc）是 OpenAI 兼容的 LLM 网关，以优惠价格提供 OpenAI、Anthropic、Google 等 300+ 模型访问。一个 base URL 加一个 key 即可接入；多线路冗余、自动故障切换，长链路 SSE 不中断；按量付费、充值额度 1:1，无订阅、无隐藏加价。 |
+### 环境要求
 
-## ✨ 功能特色
+| 工具 | 版本 | 说明 |
+|---|---|---|
+| JDK | 21 | 与 CI 一致 |
+| Android SDK | compileSdk 37（`minorApiLevel = 2`），build-tools 与 AGP 9.4 匹配 | 通过 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir` 指定 |
+| Android NDK + CMake | `:terminal`、`:workspace` 需要 | 在 SDK manager 中安装 |
+| Node.js | 22 | 构建 `web-ui` |
+| pnpm | 11 | 使用 `web-ui/pnpm-lock.yaml` |
+| Git | 任意较新版本 | 需要拉取 `material3` 子模块 |
 
-- 🎨 现代化安卓APP设计（Material 3 Expressive / 预测性返回）和 🌙 暗色模式
-- 📦 工作区：基于 proot 的 Linux 智能体环境
-- 🎬 媒体生成（图片、视频）
-- 🖥️ Web多端访问支持
-- 🛠️ MCP 与 Skills 支持
-- 🔄 多种类型的供应商支持，自定义 API / URL / 模型（目前支持 OpenAI、Google、Anthropic）
-- 🖼️ 多模态输入支持
-- 📝 Markdown 渲染（支持代码高亮、数学公式、表格、Mermaid）
-- 🔍 搜索功能（Exa、Tavily、Zhipu、LinkUp、Brave、Perplexity、..）
-- 🧩 Prompt 变量（模型名称、时间等）
-- 🤳 二维码导出和导入提供商
-- 🤖 智能体自定义
-- 🧠 基于文件的记忆
-- 📝 AI翻译
-- 🌐 自定义HTTP请求头和请求体
+```bash
+git clone --recurse-submodules https://github.com/cQwQcsleep/RikkaHub-Nova.git
+cd RikkaHub-Nova
 
-## ✨ 开发
+# 内嵌网页服务的前端（:web:preBuild 会再次执行）
+(cd web-ui && pnpm install --frozen-lockfile)
 
-> [!IMPORTANT]
-> 本项目不接受 Pull Request（PR）。
+# 构建
+./gradlew :app:assembleGithubDebug        # debug APK
+./gradlew :app:assembleGithubRelease      # R8 正式包（需要签名，见下）
+./gradlew :app:testGithubDebugUnitTest    # JVM 单元测试
+./gradlew :ai:testDebugUnitTest           # 缓存核心单元测试
+./gradlew spotlessApply                   # 代码格式化
+```
 
-本项目使用[Android Studio](https://developer.android.com/studio)开发。
+正式包签名从 `local.properties` 读取（路径相对于 `app` 模块）：
 
-技术栈文档:
+```properties
+storeFile=nova-release.jks
+storePassword=...
+keyAlias=nova
+keyPassword=...
+```
 
-- [Kotlin](https://kotlinlang.org/) (开发语言)
-- [Koin](https://insert-koin.io/) (依赖注入)
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) (UI 框架)
-- [DataStore](https://developer.android.com/topic/libraries/architecture/datastore?hl=zh-cn#preferences-datastore) (
-  偏好数据存储)
-- [Room](https://developer.android.com/training/data-storage/room) (数据库)
-- [Coil](https://coil-kt.github.io/coil/) (图片加载)
-- [Material 3 Expressive](https://m3.material.io/) (UI 设计)
-- [Navigation 3](https://developer.android.com/guide/navigation/navigation-3) (导航)
-- [Okhttp](https://square.github.io/okhttp/) (HTTP 客户端)
-- [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) (Json序列化)
+未提供时构建出的正式包不签名。因为已移除 Firebase，构建不再需要 `google-services.json`。
 
-> [!TIP]
-> 你需要在 `app` 文件夹下添加 `google-services.json` 文件才能构建应用。
+## 📁 工程结构
 
-## 💰 捐赠
+| 模块 | 职责 |
+|---|---|
+| `app` | Compose 界面、ViewModel、对话服务、设置、Room 数据库、依赖注入，以及本分支的缓存诊断 |
+| `ai` | 提供商抽象（OpenAI Chat Completions / Responses、Claude、Gemini）、消息变换、流式解码、缓存形状引擎 |
+| `common` | 通用 HTTP / JSON / Android 工具 |
+| `ui` | 可复用的 Compose 组件与 Markdown 渲染 |
+| `material3` | Material 取色工具（git 子模块 `material-color-utilities`） |
+| `document` | PDF / DOCX / PPTX / EPUB 文本提取 |
+| `highlight` | 代码高亮 |
+| `search` | 搜索服务 SDK |
+| `speech` | TTS / ASR 实现 |
+| `web` | 内嵌 Ktor 服务，托管构建好的 `web-ui` |
+| `web-ui` | React 前端，构建产物复制到 `web/src/main/resources/static` |
+| `workspace` | 沙箱化的 proot 工作区与 shell 工具 |
+| `terminal` | 终端模拟器核心与 PTY 传输 |
+| `mediagen` / `oauth` | 媒体生成与 OAuth 辅助 |
+| `app:baselineprofile` | 启动/滚动基线配置生成器 |
+| `tools/` | `i18n` 命令行与 trace 录制工具（不进入 APK） |
 
-* [Ko-fi](https://ko-fi.com/reovodev)
-* [爱发电](https://afdian.com/a/reovo)
+关键入口：`RikkaHubApp`（启动、Koin）、`ChatService`（一轮对话的编排）、`ChatRequestFactory`（请求组装）、`GenerationHandler` / `AgentLoop`（步骤循环与流式合并）、`PromptCacheObserver`（缓存诊断）。
 
-## ⭐ Star History
+## 🧾 资源引用说明
 
-如果喜欢这个项目，请给个Star ⭐
+下列资源要么已提交在仓库里，要么在构建时生成。多数资源在运行时按固定路径读取，替换时请保持文件名不变。
 
-<a href="https://www.star-history.com/?type=date&repos=re-ovo%2Frikkahub">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&theme=dark&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
- </picture>
-</a>
+| 资源 | 位置 | 引用方式 / 替换方法 |
+|---|---|---|
+| 启动图标 | `app/src/main/res/mipmap-*` 各密度 PNG + `mipmap-anydpi-v26/ic_launcher.xml`（自适应图标的背景/前景/单色三层） | 由 `AndroidManifest.xml` 的 `android:icon` 引用。替换时保持同名，四套密度 PNG 与三个自适应图层都要齐全。 |
+| 提供商 / 模型图标 | `app/src/main/assets/icons/*.svg`，少量 `.png` | `AIIcon` 通过 `file:///android_asset/icons/$path` 加载，文件名来自 `computeAIIconByName` 与模型注册表。新增提供商时补一个同名文件即可。 |
+| models.dev 模型目录 | `app/src/main/assets/models_dev.json` | 只是离线快照。`ModelsDevUpdater` 会定期从 `https://models.dev/api.json` 拉取、精简后存到 `filesDir/models_dev` 并应用；assets 里的文件只用于首次启动兜底。 |
+| 表情选择器 | `app/src/main/assets/emoji/categories.with.modifiers.min.json` | `EmojiUtils.loadEmoji` 从 assets 读取。 |
+| Markdown / Mermaid WebView | `app/src/main/assets/html/mark.html`、`html/mermaid.min.js` | `MarkdownWeb` 用该模板在 WebView 中渲染 HTML 内容。升级 Mermaid 时保持文件名即可。 |
+| 内置技能 | `app/src/main/assets/builtin_skills` | 首次启动时由 `SkillManager.ensureBuiltinSkillsExtracted` 解压到应用文件目录。 |
+| 字体 | `app/src/main/res/font/google_sans_flex.ttf`、`jetbrains_mono.ttf` | 主题与代码高亮引用。 |
+| 文档图片 | `docs/img/*`、`docs/icon.png` | 仅用于 README，不打包进 APK。 |
+| SQLite 扩展 | `app/src/main/jniLibs/{arm64-v8a,x86_64}/libsimple.so` | `SQLiteConfiguration` 通过 `SQLiteCustomExtension` 在运行时加载。属于预编译 ABI 产物，替换时所有 ABI 要一起更新。 |
+| proot 二进制 | `workspace/src/main/jniLibs/{arm64-v8a,x86_64}/libproot_*.so` | 预编译产物，供工作区启动器使用。 |
+| 原生源码 | `terminal/src/main/cpp/termux_pty.cpp`、`workspace/src/main/cpp/workspace.cpp` | Gradle 构建时由 CMake 编译（需要 NDK）。 |
+| Material 取色 | `material3/material-color-utilities` | git 子模块，锁定到固定提交；构建前执行 `git submodule update --init --recursive`。 |
+| 网页前端产物 | `web-ui/` → `web/src/main/resources/static` | `:web:preBuild` 执行 `pnpm run build` 并复制产物，目标目录已被 git 忽略。 |
+| 多语言文案 | `app/src/main/res/values*/strings.xml`，各模块自带的 `values*/strings.xml` | 用 `tools/i18n`（Bun 命令行）新增与校验。 |
+
+## 🔍 缓存实现说明
+
+- `ai/.../cache/PromptCacheShape.kt`：生成形状快照。系统文本、归一化后的工具签名各取 8 字节哈希，正文按逐条累加得到哈希链；id、时间戳、usage 这类本地字段不参与。
+- `ai/.../cache/PromptCacheLedger.kt`：按会话序列保存上一次形状并对比，给出 `system` / `tools` / `body` / `trim` 原因，并按 `PromptCachePolicy` 的厂商 TTL 判断冷启动。
+- `app/.../data/ai/PromptCacheObserver.kt`：由 `UsageRecorder` 调用，在请求发出前捕获形状，拿到 usage 后合并结论。每次请求在 `PromptCache` tag 下打一行：`prefix`、`changed`、`reasons`、`carried`、`hit`、`miss`、`cold_resume`。
+- 观察器只测量、不改写请求。任何会影响发送内容的逻辑都属于请求组装层。
+
+## 🔁 CI 与发布
+
+| 工作流 | 触发方式 | 产物 |
+|---|---|---|
+| `nova-ci.yml` | push / PR / 手动 | 运行 `:ai` 与 `:app` 单元测试，再构建 debug APK |
+| `nova-release.yml` | 手动（可指定 tag）或推送 `nova-*` tag | 签名正式包，同时构建 debug 包，一起发布为 Pre-release |
+
+签名使用仓库 Secret `NOVA_KEYSTORE_B64`（base64 的 keystore）与 `NOVA_KEY_PASSWORD`。未配置时会临时生成一次性密钥，可安装但无法覆盖升级。
+
+## 💖 支持原作者
+
+如果你喜欢这个分支，请支持原作者的工作~
+
+- Ko-fi：<https://ko-fi.com/reovodev>
+- 爱发电：<https://afdian.com/a/reovo>
+
+应用内的赞助名单仍指向原版的赞助者，原因同上。
 
 ## 📄 许可证
 
-本项目基于 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0) 开源。
+沿用 RikkaHub 的 GNU Affero General Public License v3.0。原版版权归 RikkaHub 作者所有，本分支的改动同样以 AGPL-3.0 发布。「RikkaHub」名称与图标仍属于原项目。

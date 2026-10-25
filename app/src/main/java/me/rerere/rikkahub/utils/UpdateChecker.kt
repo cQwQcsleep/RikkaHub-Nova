@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.Json
 import me.rerere.common.http.await
 import me.rerere.rikkahub.AppScope
@@ -21,7 +22,13 @@ import me.rerere.rikkahub.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-private const val API_URL = "https://updates.rikka-ai.com/"
+/**
+ * 本分支的发布源。
+ *
+ * 上游的更新接口只会返回官方 APK，而官方包与本分支的签名不同，安装会失败，
+ * 因此这里直接读本仓库的 Releases（包含 prerelease，按创建时间倒序取最新一条）。
+ */
+private const val API_URL = "https://api.github.com/repos/cQwQcsleep/RikkaHub-Nova/releases?per_page=1"
 
 class UpdateChecker(
     private val client: OkHttpClient,
@@ -51,7 +58,24 @@ class UpdateChecker(
                             .build()
                     ).await()
                     if (response.isSuccessful) {
-                        json.decodeFromString<UpdateInfo>(response.body.string())
+                        val release = json.decodeFromString<List<GitHubRelease>>(response.body.string())
+                            .firstOrNull()
+                            ?: throw Exception("No release found")
+                        UpdateInfo(
+                            // tag 形如 v3.1.1-nova.3，去掉前缀后与 BuildConfig.VERSION_NAME 同构才能比较
+                            version = release.tagName.removePrefix("v"),
+                            publishedAt = release.publishedAt.orEmpty(),
+                            changelog = release.body.orEmpty(),
+                            downloads = release.assets
+                                .filter { it.name.endsWith(".apk") }
+                                .map {
+                                    UpdateDownload(
+                                        name = it.name,
+                                        url = it.browserDownloadUrl,
+                                        size = it.size.readableSize(),
+                                    )
+                                },
+                        )
                     } else {
                         throw Exception("Failed to fetch update info")
                     }
@@ -104,6 +128,28 @@ data class UpdateInfo(
     val changelog: String,
     val downloads: List<UpdateDownload>
 )
+
+/** GitHub Releases API 的最小字段集 */
+@Serializable
+private data class GitHubRelease(
+    @SerialName("tag_name") val tagName: String,
+    val body: String? = null,
+    @SerialName("published_at") val publishedAt: String? = null,
+    val assets: List<GitHubAsset> = emptyList(),
+)
+
+@Serializable
+private data class GitHubAsset(
+    val name: String,
+    @SerialName("browser_download_url") val browserDownloadUrl: String,
+    val size: Long = 0,
+)
+
+private fun Long.readableSize(): String = when {
+    this >= 1024 * 1024 -> "${(this / 1024f / 1024f).toFixed(1)} MB"
+    this >= 1024 -> "${this / 1024} KB"
+    else -> "$this B"
+}
 
 /**
  * 版本号值类，封装版本号字符串并提供比较功能

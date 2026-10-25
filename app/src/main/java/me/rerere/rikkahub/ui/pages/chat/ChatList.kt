@@ -93,6 +93,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.R
@@ -301,15 +302,19 @@ private fun ChatListNormal(
         // 自动滚动到底部
         if (settings.displaySetting.enableAutoScroll) {
             LaunchedEffect(state) {
-                snapshotFlow { state.layoutInfo.visibleItemsInfo }.collect { visibleItemsInfo ->
-                    // println("is bottom = ${visibleItemsInfo.isAtBottom()}, scroll = ${state.isScrollInProgress}, can_scroll = ${state.canScrollForward}, loading = $loading")
-                    if (!state.isScrollInProgress && loadingState) {
-                        if (visibleItemsInfo.isAtBottom()) {
-                            state.requestScrollToItem(conversationUpdated.messageNodes.lastIndex + 10)
-                            // Log.i(TAG, "ChatList: scroll to ${conversationUpdated.messageNodes.lastIndex}")
-                        }
+                // 布局变化每个 token 都会触发一次；合并后再判断，并限制请求频率，
+                // 避免在长回复时每帧都排一次滚动任务导致掉帧
+                var lastRequestAt = 0L
+                snapshotFlow { state.layoutInfo.visibleItemsInfo }
+                    .conflate()
+                    .collect { visibleItemsInfo ->
+                        if (state.isScrollInProgress || !loadingState) return@collect
+                        if (!visibleItemsInfo.isAtBottom()) return@collect
+                        val now = android.os.SystemClock.uptimeMillis()
+                        if (now - lastRequestAt < 50L) return@collect
+                        lastRequestAt = now
+                        state.requestScrollToItem(conversationUpdated.messageNodes.lastIndex + 10)
                     }
-                }
             }
         }
 

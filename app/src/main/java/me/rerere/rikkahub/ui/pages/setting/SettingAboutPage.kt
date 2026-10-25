@@ -171,6 +171,11 @@ fun SettingAboutPage() {
                                 fontWeight = FontWeight.Black,
                             ),
                         )
+                        Text(
+                            text = stringResource(R.string.about_page_fork_subtitle),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
                     }
                 }
 
@@ -204,16 +209,22 @@ fun SettingAboutPage() {
                     val contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                     CardGroup {
                         item(
-                            onClick = { context.openUrl("https://rikka-ai.com/") },
-                            leadingContent = { CardGroupIcon(HugeIcons.Earth, containerColor = containerColor, contentColor = contentColor) },
-                            supportingContent = { Text("https://rikka-ai.com") },
-                            headlineContent = { Text(stringResource(R.string.about_page_website)) },
+                            onClick = { context.openUrl("https://github.com/cQwQcsleep/RikkaHub-Nova") },
+                            leadingContent = { CardGroupIcon(HugeIcons.Github, containerColor = containerColor, contentColor = contentColor) },
+                            supportingContent = { Text("https://github.com/cQwQcsleep/RikkaHub-Nova") },
+                            headlineContent = { Text(stringResource(R.string.about_page_branch_repo)) },
                         )
                         item(
                             onClick = { context.openUrl("https://github.com/rikkahub/rikkahub") },
                             leadingContent = { CardGroupIcon(HugeIcons.Github, containerColor = containerColor, contentColor = contentColor) },
                             supportingContent = { Text("https://github.com/rikkahub/rikkahub") },
-                            headlineContent = { Text(stringResource(R.string.about_page_github)) },
+                            headlineContent = { Text(stringResource(R.string.about_page_upstream_repo)) },
+                        )
+                        item(
+                            onClick = { context.openUrl("https://rikka-ai.com/") },
+                            leadingContent = { CardGroupIcon(HugeIcons.Earth, containerColor = containerColor, contentColor = contentColor) },
+                            supportingContent = { Text("https://rikka-ai.com") },
+                            headlineContent = { Text(stringResource(R.string.about_page_website)) },
                         )
                         item(
                             onClick = { context.openUrl("https://github.com/rikkahub/rikkahub/blob/master/LICENSE") },
@@ -222,6 +233,48 @@ fun SettingAboutPage() {
                             headlineContent = { Text(stringResource(R.string.about_page_license)) },
                         )
                     }
+                }
+
+                item {
+                    val containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    CardGroup(title = { Text(stringResource(R.string.about_page_authors)) }) {
+                        item(
+                            onClick = { context.openUrl("https://github.com/rikkahub/rikkahub") },
+                            leadingContent = { CardGroupIcon(HugeIcons.Github, containerColor = containerColor, contentColor = contentColor) },
+                            supportingContent = { Text("rikkahub / Reovo") },
+                            headlineContent = { Text(stringResource(R.string.about_page_author_upstream)) },
+                        )
+                        item(
+                            onClick = { context.openUrl("https://github.com/cQwQcsleep") },
+                            leadingContent = { CardGroupIcon(HugeIcons.Github, containerColor = containerColor, contentColor = contentColor) },
+                            supportingContent = { Text("cQwQcsleep") },
+                            headlineContent = { Text(stringResource(R.string.about_page_author_fork)) },
+                        )
+                    }
+                }
+
+                item {
+                    CardGroup(title = { Text(stringResource(R.string.about_page_fork_diff_title)) }) {
+                        item(
+                            headlineContent = { Text(stringResource(R.string.about_page_fork_title)) },
+                            supportingContent = {
+                                Text(
+                                    text = stringResource(R.string.about_page_fork_diff),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            },
+                        )
+                    }
+                }
+
+                item {
+                    Text(
+                        text = stringResource(R.string.about_page_fork_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
                 }
             }
         }

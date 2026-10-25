@@ -1,10 +1,12 @@
 <div align="center">
   <img src="docs/icon.png" alt="App 圖標" width="100" />
-  <h1>RikkaHub</h1>
+  <h1>RikkaHub Nova</h1>
 
-一個原生Android LLM 聊天客戶端，支持切換不同的供應商進行聊天 🤖💬
+一個原生 Android LLM 聊天客戶端，為 [RikkaHub](https://github.com/rikkahub/rikkahub) 的第三方分支。
 
-點擊加入我們的Discord伺服器 👉 [【RikkaHub】](https://discord.gg/9weBqxe5c4)
+原版作者：**Reovo / rikkahub** · 分支維護：**cQwQcsleep**
+
+> 本頁沿用上游的繁體中文說明，分支改動、建置方式與資源引用請見 [简体中文](README_ZH_CN.md) 或 [English](README.md)。
 
 [English](README.md) | 繁體中文 | [简体中文](README_ZH_CN.md)
 

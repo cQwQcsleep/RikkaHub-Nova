@@ -1,125 +1,159 @@
 <div align="center">
   <img src="docs/icon.png" alt="App Icon" width="100" />
-  <h1>RikkaHub</h1>
+  <h1>RikkaHub Nova</h1>
 
-A native Android LLM chat client that supports switching between different providers for
-conversations 🤖💬
+A native Android LLM chat client, forked from [RikkaHub](https://github.com/rikkahub/rikkahub).
 
-Click to join our Discord server 👉 [【RikkaHub】](https://discord.gg/9weBqxe5c4)
-
-[简体中文](README_ZH_CN.md) | [繁體中文](README_ZH_TW.md) | English
+Original author: **Reovo / rikkahub** · Fork maintainer: **cQwQcsleep**
 </div>
-
-## 🧬 Nova fork
-
-This repository is the **Nova** third-party fork of RikkaHub. It keeps upstream behavior and UI,
-and concentrates on prompt-cache efficiency and streaming cost:
-
-- **Cache diagnostics** — every request records the shape of its prefix (system prompt, tool
-  declarations, cumulative message chain) and compares it with the previous request of the same
-  conversation. Vendor usage remains the source of truth for hit/miss tokens; the shape explains
-  *why* a prefix missed (`system` / `tools` / `body` / `trim`), and long idle gaps are reported as a
-  cold resume using a per-vendor TTL (24h for DeepSeek, 5m for DashScope and Anthropic).
-  The approach follows Reasonix's `PrefixShape` diagnostics.
-- **Cache-stable prefixes** — tool declarations are sorted by name before they are sent, so MCP
-  servers that enumerate tools in a different order after a reconnect no longer invalidate the
-  provider-side prefix.
-- **Streaming hot path** — the OpenAI, Responses, Claude and Gemini paths serialize the request body
-  once per request instead of twice, skip log-string interpolation unless the level is enabled, and
-  merge chunks into a single assistant message without copying the whole message list per token.
-  Reasoning-tag extraction no longer re-scans the growing answer with a lazy regex.
-- **Repeated image encoding** — encoded images are cached by file identity with a bounded LRU, so
-  each request no longer decodes, re-compresses and base64-encodes the same history images.
-- **No Firebase** — analytics and Crashlytics are removed so a self-built fork needs no
-  `google-services.json`; upstream's placeholder-free builds still require their own Firebase project.
-
-CI (`.github/workflows/nova-ci.yml`) builds the debug APK and runs unit tests, and
-`.github/workflows/nova-release.yml` publishes signed APKs to Releases.
 
 <div align="center">
   <img src="docs/img/poster.png" alt="RikkaHub" width="800" />
 </div>
 
+## 🧬 What this fork changes
+
+Nova keeps upstream behavior and UI, and concentrates on prompt-cache efficiency plus streaming cost.
+
+| Area | Change |
+|---|---|
+| Prompt cache | Every request records the shape of its prefix (system prompt, tool declarations, cumulative message chain) and compares it with the previous request of the same conversation. Vendor usage stays the source of truth for hit/miss tokens; the shape explains *why* it missed (`system` / `tools` / `body` / `trim`) and reports long idle gaps as a cold resume using a per-vendor TTL (24h DeepSeek, 5m DashScope/Anthropic). |
+| Cache-stable prefix | Tool declarations are sorted by name before sending, so MCP servers that enumerate tools in a different order after a reconnect no longer invalidate the provider cache. |
+| Streaming hot path | Request bodies are serialized once instead of twice, log strings are only built when the level is enabled, and chunks are merged into one assistant message without copying the whole message list per token. |
+| Reasoning tags | The leading `<think>` block is found with a linear scan instead of a lazy regex that re-scanned the growing answer every token. |
+| Repeated encoding | Encoded images and parsed documents are cached by file identity with bounded LRUs, so history images/PDFs are no longer decoded and re-encoded on every request. |
+| UI cost | Content-size animations no longer restart on every streaming token, the reasoning preview follows new text with a conflated scroll instead of restarting a scroll animation per token, the auto-follow scroll is throttled, and the animated mesh background is sampled at 20 fps. |
+| Data display | Token speed is computed from consistently measured fields (multi-step totals), cache hit rate is shown, and duration/speed formatting adapts to magnitude. |
+| No Firebase | Analytics and Crashlytics are removed; self-built forks no longer need `google-services.json`. |
+| About page | Adds fork identity, both authors, links to this repository and upstream, and a list of differences. |
+
+Bugs in this fork belong to the fork repository; please do not report them upstream.
+
 ## 🚀 Download
 
-🔗 [Download from Website](https://rikka-ai.com/download) (Recommended)
+- Releases: <https://github.com/cQwQcsleep/RikkaHub-Nova/releases>
+- `app-github-universal-release.apk` works on every supported ABI; `arm64-v8a` / `x86_64` are smaller.
+- APKs are signed with the fork's CI key, so later Nova releases install over earlier ones.
+- `app-github-universal-debug.apk` is unminified and uses the `.debug` package id; it installs alongside release and is there to diagnose R8-only issues.
 
-🔗 [Download from Google Play](https://play.google.com/store/apps/details?id=me.rerere.rikkahub)
+## ✨ Features (inherited from upstream)
 
-> [!WARNING]
-> There are many forked versions of RikkaHub. Issues with forks are unrelated to RikkaHub, so please use forks with caution to avoid privacy leaks or excessive permission requests.
+- Material 3 Expressive design, dark mode, dynamic color
+- Multiple providers: any OpenAI / Anthropic / Google-compatible API, custom headers and bodies
+- Multimodal input (image, text document, PDF, DOCX), media generation
+- MCP, skills, local workspace (proot Linux shell), Web access
+- Markdown rendering with code highlighting, LaTeX, tables, Mermaid
+- Search providers (Exa, Tavily, Zhipu, LinkUp, Brave, Perplexity, SearXNG, ...)
+- Agent customization, file-based memory, AI translation, SillyTavern character cards
 
-## 💖 Sponsors
+## 🛠 Build from source
 
-| Sponsor | Description |
-|:---:|:---|
-| <img src="docs/sponsors/aihubmix.png" alt="Aihubmix" width="50" /><br /><b>Aihubmix</b> | Thanks to <a href="https://aihubmix.com?aff=pG7r">aihubmix.com</a> for their financial support. We recommend using aihubmix as a one-stop shop for mainstream models worldwide. (OpenAI, Claude, Google Gemini, DeepSeek, Qwen, and hundreds more). |
-| <img src="docs/sponsors/api-mart.png" alt="APIMart" width="50" /><br /><b><a href="https://go.apimart.ai/gh-rikkahub">APIMart</a></b> | Thanks to APIMart for sponsoring this project! APIMart is a low-cost API platform for AI image & video generation — GPT-Image-2 from $0.006/image, 160+ images per dollar. One async API covers both image and video: submit a task, get an ID, fetch results via polling or callback. Batch tens of thousands of images without timeouts, switch models without changing code. Pay-as-you-go with no monthly fee — <a href="https://go.apimart.ai/gh-rikkahub">sign up here</a> to get started. |
-| <img src="docs/sponsors/suixiang.jpg" alt="随想AI中转" width="50" /><br /><b><a href="https://sui-xiang.com">随想AI中转</a></b> | 感谢<a href="https://sui-xiang.com">随想AI中转</a>对本项目的赞助！随想AI中转 是一家可靠高效的 API 中继服务提供商，提供 Claude、Codex、Gemini 等的中继服务。注重隐私的中转站·无数据倒卖·无模型掺水，隐私，透明，极速售后。新账户注册每日签到就送 0.5 元测试额度，充值额度 1:1，无需订阅，按量付费。多线路冗余、跨区域容灾、自动故障切换，长链路 SSE 不中断。99.9% 可用性，关键调用从不掉队。 |
-| <img src="docs/sponsors/ztest.png" alt="真测 ztest.ai" width="50" /><br /><b><a href="https://ztest.ai">真测 ztest.ai</a></b> | 感谢<a href="https://ztest.ai">真测 ztest.ai</a>对本项目的赞助！真测 ztest.ai 是一个 AI 中转站模型检测平台，检测结果数据全公开，23 项探针覆盖协议、身份、能力、内容完整性、安全性、性能六大维度，交叉印证识别伪造与降级。作为独立第三方验证平台，实时监测 AI 中转站的模型真实性、响应质量与服务可用性。 |
-| <img src="docs/sponsors/maru.png" alt="MaruCode" width="50" /><br /><b><a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">MaruCode</a></b> | <b><a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">MaruCode</a></b> 是一家偶尔做做慈善的小破站 API，自营号池，主要提供 Codex、Claude Code、GPT Image 等主流模型，支持 Websocket 协议，明码标价(Codex 0.25x, CC 1.5x)，透明汇率(1:1)，<a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">新用户注册送 2 刀</a>。<a href="https://images-2.muteki.site">生图工作台🖼️</a> |
-| <img src="docs/sponsors/naapi.png" alt="NaAPI 钠API" width="50" /><br /><b><a href="https://naapi.cc/register?aff=rikkahub">NaAPI 钠API</a></b> | Thanks to <a href="https://naapi.cc/register?aff=rikkahub">NaAPI</a> (naapi.cc) for sponsoring this project! NaAPI is an OpenAI-compatible LLM gateway that reliably serves 300+ models from OpenAI, Anthropic, Google and others at discounted pricing. One base URL and one key is all you need: multi-line redundancy with automatic failover keeps long SSE streams alive, and pricing is strictly pay-as-you-go with a 1:1 top-up ratio — no subscription, no hidden markup. |
+### Requirements
 
-## ✨ Features
+| Tool | Version | Notes |
+|---|---|---|
+| JDK | 21 | Matches the CI toolchain |
+| Android SDK | compileSdk 37 (`minorApiLevel = 2`), build-tools matching AGP 9.4 | `ANDROID_HOME` or `local.properties` `sdk.dir` |
+| Android NDK + CMake | required by `:terminal` and `:workspace` | Installed through the SDK manager |
+| Node.js | 22 | Builds `web-ui` |
+| pnpm | 11 | `web-ui/pnpm-lock.yaml` |
+| Git | any recent | Must fetch the `material3` submodule |
 
-- 🎨 Material 3 Expressive design and 🌙 Dark mode
-- 📦 Workspace: a proot-based Linux agent environment
-- 🎬 Media generation (image and video)
-- 🔄 Multiple AI Provider Support: custom API / URL / models (all OpenAI, Google, Anthropic compatible api)
-- 🖼️ Multimodal input support (Image, Text Documentation, PDF, Docx)
-- 🖥️ Web access for multi-platform use
-- 🛠️ MCP and Skills support
-- 📝 Markdown Rendering (with code highlighting, Latex formulas, tables, Mermaid)
-- 🔍 Search capabilities (Exa, Tavily, Zhipu, LinkUp, Brave, Perplexity, etc.)
-- 🧩 Prompt variables (model name, time, etc.)
-- 🤳 QR code export and import for providers
-- 🤖 Agent customization
-- 🧠 File-based memory
-- 📝 AI Translation
-- 🌐 Custom HTTP request headers and request bodies
-- 💌 Silly Tavern character card import
+```bash
+git clone --recurse-submodules https://github.com/cQwQcsleep/RikkaHub-Nova.git
+cd RikkaHub-Nova
 
-## ✨ Development
+# frontend for the embedded web server (:web:preBuild runs this again)
+(cd web-ui && pnpm install --frozen-lockfile)
 
-> [!IMPORTANT]
-> This project does not accept pull requests (PRs).
+# build
+./gradlew :app:assembleGithubDebug        # debug APK
+./gradlew :app:assembleGithubRelease      # R8 release APK (needs signing, see below)
+./gradlew :app:testGithubDebugUnitTest    # JVM unit tests
+./gradlew :ai:testDebugUnitTest           # cache core unit tests
+./gradlew spotlessApply                   # formatting (ratcheted against upstream)
+```
 
-This project is developed using [Android Studio](https://developer.android.com/studio).
+Release signing is read from `local.properties` (path relative to the `app` module):
 
-Technology stack documentation:
+```properties
+storeFile=nova-release.jks
+storePassword=...
+keyAlias=nova
+keyPassword=...
+```
 
-- [Kotlin](https://kotlinlang.org/) (Development language)
-- [Koin](https://insert-koin.io/) (Dependency Injection)
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) (UI framework)
-- [DataStore](https://developer.android.com/topic/libraries/architecture/datastore) (Preference data
-  storage)
-- [Room](https://developer.android.com/training/data-storage/room) (Database)
-- [Coil](https://coil-kt.github.io/coil/) (Image loading)
-- [Material 3 Expressive](https://m3.material.io/) (UI design)
-- [Navigation 3](https://developer.android.com/guide/navigation/navigation-3) (Navigation)
-- [Okhttp](https://square.github.io/okhttp/) (HTTP client)
-- [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) (JSON serialization)
+Without those values the release variant is built unsigned. There is no `google-services.json` requirement because Firebase was removed.
 
-> [!TIP]
-> You need a `google-services.json` file at `app` folder to build the app.
+## 📁 Project structure
 
-## 💰 Donate
+| Module | Responsibility |
+|---|---|
+| `app` | UI (Compose), ViewModels, chat service, settings, Room database, DI, this fork's cache diagnostics |
+| `ai` | Provider abstraction (OpenAI Chat Completions / Responses, Claude, Gemini), transformers, stream decoders, prompt-cache shape engine |
+| `common` | Shared HTTP/JSON/Android helpers |
+| `ui` | Reusable Compose components and the Markdown renderer |
+| `material3` | Material color utilities (git submodule `material-color-utilities`) |
+| `document` | PDF / DOCX / PPTX / EPUB text extraction |
+| `highlight` | Code syntax highlighting |
+| `search` | Search provider SDK |
+| `speech` | TTS / ASR implementations |
+| `web` | Embedded Ktor server that serves the built `web-ui` |
+| `web-ui` | React admin/client frontend, built into `web/src/main/resources/static` |
+| `workspace` | Sandboxed proot workspace and shell tools |
+| `terminal` | Terminal emulator core and PTY transport |
+| `mediagen` / `oauth` | Media generation and OAuth helpers |
+| `app:baselineprofile` | Baseline profile generator used for startup/scroll profiles |
+| `tools/` | `i18n` CLI and trace recorder (not part of the APK) |
 
-* [Ko-fi](https://ko-fi.com/reovodev)
-* [爱发电](https://afdian.com/a/reovo)
+Key entry points: `RikkaHubApp` (startup, Koin), `ChatService` (turn orchestration), `ChatRequestFactory` (request assembly), `GenerationHandler`/`AgentLoop` (step loop and streaming merge), `PromptCacheObserver` (cache diagnostics).
 
-## ⭐ Star History
+## 🧾 Resource references
 
-If you like this project, please give it a star ⭐
+Everything below is either committed in the repository or generated at build time. Keep the names stable: most are resolved at runtime by exact path.
 
-<a href="https://www.star-history.com/?type=date&repos=re-ovo%2Frikkahub">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&theme=dark&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=re-ovo/rikkahub&type=date&legend=top-left&sealed_token=qSytWeq7LkzQQViTjK0MYlvvA_qkfuwjOxOqgbRpLUZZwok5rO6LXhpVL7Mq-q3o89BfKpzE7g66BCy18H6eiqTsD8czD0J-HejLqmHy-npcvCTHu11wZw" />
- </picture>
-</a>
+| Resource | Location | Referenced by / how to replace |
+|---|---|---|
+| Launcher icon | `app/src/main/res/mipmap-*` PNGs + `mipmap-anydpi-v26/ic_launcher.xml` (adaptive background/foreground/monochrome layers) | `AndroidManifest.xml` `android:icon`. Keep the same resource names when replacing; all four density PNGs and the three adaptive layers are needed. |
+| Provider / model icons | `app/src/main/assets/icons/*.svg` and a few `.png` | `AIIcon` loads `file:///android_asset/icons/$path`; the file name comes from `computeAIIconByName` and the model registry. Add a file with the expected name to support a new provider. |
+| models.dev catalog | `app/src/main/assets/models_dev.json` | Offline snapshot only. `ModelsDevUpdater` fetches `https://models.dev/api.json` periodically, trims it, stores it under `filesDir/models_dev` and applies it; the asset is the first-launch fallback. |
+| Emoji picker | `app/src/main/assets/emoji/categories.with.modifiers.min.json` | `EmojiUtils.loadEmoji` reads it from assets. |
+| Markdown / Mermaid WebView | `app/src/main/assets/html/mark.html`, `html/mermaid.min.js` | `MarkdownWeb` renders legacy HTML content in a WebView with this template. Replacing `mermaid.min.js` only requires keeping the file name. |
+| Built-in skills | `app/src/main/assets/builtin_skills` | Extracted to the app files directory on first launch by `SkillManager.ensureBuiltinSkillsExtracted`. |
+| Fonts | `app/src/main/res/font/google_sans_flex.ttf`, `jetbrains_mono.ttf` | Referenced by the theme and code highlighting. |
+| README images | `docs/img/*`, `docs/icon.png` | Documentation only; not packaged. |
+| SQLite extension | `app/src/main/jniLibs/{arm64-v8a,x86_64}/libsimple.so` | Loaded at runtime by `SQLiteConfiguration` via `SQLiteCustomExtension`. Prebuilt ABI binaries; replace all shipped ABIs together. |
+| proot binaries | `workspace/src/main/jniLibs/{arm64-v8a,x86_64}/libproot_*.so` | Prebuilt; used by the workspace launcher. |
+| Native sources | `terminal/src/main/cpp/termux_pty.cpp`, `workspace/src/main/cpp/workspace.cpp` | Built by CMake during the Gradle build (needs NDK). |
+| Material color utilities | `material3/material-color-utilities` | Git submodule pinned to a commit; `git submodule update --init --recursive` before building. |
+| Web UI output | `web-ui/` → `web/src/main/resources/static` | `:web:preBuild` runs `pnpm run build` and copies the output; the destination is git-ignored. |
+| Translations | `app/src/main/res/values*/strings.xml`, module-level `values*/strings.xml` | Added/validated with `tools/i18n` (Bun CLI). |
+
+## 🔍 Prompt-cache internals
+
+- `ai/.../cache/PromptCacheShape.kt` builds the shape: 8-byte hashes for the system text, the normalized tool signature, and a cumulative chain over provider-visible message content. Local-only fields (ids, timestamps, usage) never enter the hash.
+- `ai/.../cache/PromptCacheLedger.kt` keeps the previous shape per conversation sequence, compares them, and reports `system` / `tools` / `body` / `trim` plus cold resumes using `PromptCachePolicy` TTLs.
+- `app/.../data/ai/PromptCacheObserver.kt` is called from `UsageRecorder`: it captures the shape before a request and combines it with the vendor usage afterwards. Each request logs one line (`prefix`, `changed`, `reasons`, `carried`, `hit`, `miss`, `cold_resume`) under the `PromptCache` tag.
+- The observer never rewrites a request. Anything that changes what is sent belongs to request assembly; the observer only measures.
+
+## 🔁 CI and releases
+
+| Workflow | Trigger | Result |
+|---|---|---|
+| `nova-ci.yml` | push / PR / manual | Runs `:ai` and `:app` unit tests, then builds the debug APK |
+| `nova-release.yml` | manual (optional tag) or `nova-*` tags | Signs release APKs, also builds the debug APK, publishes them as a pre-release |
+
+Release signing uses repository secrets `NOVA_KEYSTORE_B64` (base64 keystore) and `NOVA_KEY_PASSWORD`. Without them the workflow generates a throwaway key, which is fine for testing but breaks upgrade installs.
+
+## 💖 Support the original author
+
+If you like this fork, please support the original author's work:
+
+- Ko-fi: <https://ko-fi.com/reovodev>
+- 爱发电: <https://afdian.com/a/reovo>
+
+The in-app sponsor list still points to upstream's sponsors and is kept for the same reason.
 
 ## 📄 License
 
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+GNU Affero General Public License v3.0, inherited from RikkaHub. Upstream copyright belongs to the RikkaHub authors; changes in this fork are released under the same license. The "RikkaHub" name and logo remain the original project's identity.

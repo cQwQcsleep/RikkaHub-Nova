@@ -6,6 +6,16 @@
   <string name="about_page_title">关于</string>
   <string name="about_page_version">版本</string>
   <string name="about_page_website">官网</string>
+  <string name="about_page_fork_title">本分支</string>
+  <string name="about_page_fork_subtitle">Nova · 第三方分支</string>
+  <string name="about_page_branch_repo">Nova 仓库</string>
+  <string name="about_page_upstream_repo">原版项目</string>
+  <string name="about_page_authors">作者</string>
+  <string name="about_page_author_upstream">原版作者</string>
+  <string name="about_page_author_fork">分支维护</string>
+  <string name="about_page_fork_diff_title">本分支与原版的区别</string>
+  <string name="about_page_fork_diff">• 提示词缓存诊断：记录每次请求的前缀（系统提示、工具声明、消息链），说明缓存未命中的原因与冷启动\n• 前缀更稳定：工具声明按名称排序，MCP 重连后顺序变化不再让厂商缓存失效\n• 性能：流式热路径去掉逐 token 的日志字符串与列表拷贝，图片/文档编码结果缓存，思维链与滚动动画不再每个 token 重启动画\n• 移除 Firebase：不再包含统计与崩溃上报，构建不需要 google-services.json</string>
+  <string name="about_page_fork_note">Nova 是独立的第三方分支，分支相关的问题请反馈到分支仓库，而不是原版仓库。</string>
   <string name="add">添加</string>
   <string name="app_name">RikkaHub</string>
   <string name="asr_button_content_description">语音识别</string>
@@ -816,7 +826,7 @@
   <string name="setting_page_documentation">使用文档</string>
   <string name="setting_page_documentation_desc">查看应用使用说明和帮助文档</string>
   <string name="setting_page_donate">赞助</string>
-  <string name="setting_page_donate_desc">如果你喜欢这个应用，请赞助作者的工作</string>
+  <string name="setting_page_donate_desc">如果你喜欢这个分支，请支持原作者的工作~</string>
   <string name="setting_page_dynamic_color">动态颜色</string>
   <string name="setting_page_dynamic_color_desc">是否基于壁纸动态生成 app 主题配色</string>
   <string name="setting_page_extensions">扩展管理</string>
@@ -845,7 +855,7 @@
   <string name="setting_page_search_title">搜索服务</string>
   <string name="setting_page_share">分享</string>
   <string name="setting_page_share_desc">分享本APP给朋友</string>
-  <string name="setting_page_share_text">RikkaHub - 开源安卓AI助手\n\n官网: https://rikka-ai.com/</string>
+  <string name="setting_page_share_text">RikkaHub Nova - 开源安卓 AI 助手（RikkaHub 第三方分支）\n\n仓库：https://github.com/cQwQcsleep/RikkaHub-Nova</string>
   <string name="setting_page_sponsor_alert_confirm">捐赠</string>
   <string name="setting_page_sponsor_alert_desc">您已启动应用超过100次！如果您喜欢使用它，请考虑支持开发者。</string>
   <string name="setting_page_sponsor_alert_dismiss">暂不</string>
@@ -1624,6 +1634,7 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="chat_message_usage_total_output">总输出</string>
   <string name="chat_message_usage_speed">速度</string>
   <string name="chat_message_usage_duration">时长</string>
+  <string name="chat_message_usage_cache_rate">缓存命中</string>
   <string name="stats_page_usage_title">Token 用量</string>
   <string name="stats_page_range_7d">7 天</string>
   <string name="stats_page_range_30d">30 天</string>

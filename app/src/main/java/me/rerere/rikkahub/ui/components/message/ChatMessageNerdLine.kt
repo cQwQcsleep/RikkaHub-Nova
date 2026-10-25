@@ -111,7 +111,7 @@ fun ChatMessageNerdLine(
                     if (stats.tps != null) {
                         StatsItem(
                             icon = { StatsIcon(HugeIcons.Zap, stringResource(R.string.chat_message_usage_speed)) },
-                            content = { Text(text = "${stats.tps.toFixed(1)} tok/s") }
+                            content = { Text(text = stats.tps.label(stats.speedEstimated)) }
                         )
                     }
                     StatsItem(
@@ -148,8 +148,15 @@ private fun UsageDetails(stats: NerdStats, contextLength: Int?) {
             if (total.cachedTokens > 0) UsageDetailRow(stringResource(R.string.chat_message_usage_total_cached), total.cachedTokens.exact())
             UsageDetailRow(stringResource(R.string.chat_message_usage_total_output), total.completionTokens.exact())
         }
-        if (stats.tps != null) UsageDetailRow(stringResource(R.string.chat_message_usage_speed), "${stats.tps.toFixed(1)} tok/s")
-        if (stats.durationMillis != null) UsageDetailRow(stringResource(R.string.chat_message_usage_duration), "${(stats.durationMillis / 1000f).toFixed(1)}s")
+        stats.cacheHitRate?.let { rate ->
+            UsageDetailRow(stringResource(R.string.chat_message_usage_cache_rate), "${(rate * 100).toFixed(0)}%")
+        }
+        if (stats.tps != null) {
+            UsageDetailRow(stringResource(R.string.chat_message_usage_speed), stats.tps.label(stats.speedEstimated))
+        }
+        if (stats.durationMillis != null) {
+            UsageDetailRow(stringResource(R.string.chat_message_usage_duration), stats.durationMillis.asDuration())
+        }
     }
 }
 
@@ -298,25 +305,53 @@ private data class NerdStats(
     val contextTokens: Int,
     val durationMillis: Long?,
     val tps: Float?,
+    val speedEstimated: Boolean = false,
+    val cacheHitRate: Float? = null,
 )
 
 private fun UIMessage.nerdStats(usage: TokenUsage): NerdStats {
     val last = lastRequestUsage() ?: usage
-    // 旧消息没有记录生成耗时，退回用创建到完成的总时长估算
-    val durationMillis = finishedAt?.let { finishedAt ->
-        generationTimeMs ?: Duration.between(
-            createdAt.toJavaLocalDateTime(),
-            finishedAt.toJavaLocalDateTime()
-        ).toMillis()
-    }?.takeIf { it > 0 }
+    val steps = stepCount ?: 1
+    // 优先使用逐步骤累计的生成耗时；旧消息没有这个字段时，只有单步消息能用创建到完成
+    // 的间隔粗略估算——多步消息的间隔里还包含工具执行与审批等待，拿来算速度会明显偏低
+    val measuredDuration = generationTimeMs?.takeIf { it > 0 }
+    val estimatedDuration = if (measuredDuration == null && steps == 1) {
+        finishedAt?.let { finishedAt ->
+            Duration.between(
+                createdAt.toJavaLocalDateTime(),
+                finishedAt.toJavaLocalDateTime()
+            ).toMillis()
+        }?.takeIf { it > 0 }
+    } else {
+        null
+    }
+    val durationMillis = measuredDuration ?: estimatedDuration
     return NerdStats(
         total = usage,
         lastUsage = last,
-        steps = stepCount ?: 1,
+        steps = steps,
         contextTokens = last.promptTokens + last.completionTokens,
         durationMillis = durationMillis,
-        tps = durationMillis?.let { usage.completionTokens.toFloat() / it * 1000 },
+        // 输出 token 与生成耗时都按步骤累计，二者相除才是一整段生成的平均速度
+        tps = durationMillis?.takeIf { usage.completionTokens > 0 }
+            ?.let { usage.completionTokens.toFloat() / it * 1000f }
+            ?.takeIf { it.isFinite() && it > 0f },
+        speedEstimated = measuredDuration == null && estimatedDuration != null,
+        cacheHitRate = last.promptTokens.takeIf { it > 0 && last.cachedTokens > 0 }
+            ?.let { last.cachedTokens.toFloat() / it },
     )
+}
+
+/** 小于 10 时保留两位，避免 0.4 这类值被四舍五入成 0.0 */
+private fun Float.label(estimated: Boolean = false): String {
+    val value = if (this < 10f) toFixed(2) else toFixed(1)
+    return (if (estimated) "~" else "") + "$value tok/s"
+}
+
+private fun Long.asDuration(): String = when {
+    this < 1_000 -> "${this}ms"
+    this < 60_000 -> "${(this / 1000f).toFixed(1)}s"
+    else -> "${(this / 60_000f).toFixed(1)}min"
 }
 
 private fun Int.exact(): String = NumberFormat.getIntegerInstance().format(this)
