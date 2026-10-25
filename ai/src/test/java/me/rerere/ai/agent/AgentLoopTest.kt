@@ -3,6 +3,7 @@ package me.rerere.ai.agent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
@@ -362,6 +363,26 @@ class AgentLoopTest {
         assertEquals(listOf("checking!", "done!"), message.texts())
         // 下一步发给模型的是处理后的内容
         assertEquals(listOf("checking!"), provider.requests[1].messages.last().texts())
+    }
+
+    // 流式预览由独立的帧定时器发出，和读取分片的协程不是同一个；
+    // 用 flow {} 会抛 "Emission from another coroutine is detected"，这里锁住修复后的行为
+    @Test
+    fun `frame previews may be emitted while the stream is suspended`() = runTest {
+        provider.stream {
+            emit(StreamChunk.TextStart("text"))
+            emit(StreamChunk.TextDelta("text", "a"))
+            delay(40)
+            emit(StreamChunk.TextDelta("text", "b"))
+            delay(40)
+            emit(StreamChunk.Finish())
+        }
+
+        val events = runToEnd()
+
+        val previews = events.filterIsInstance<AgentEvent.MessageUpdated>().dropLast(1)
+        assertTrue(previews.isNotEmpty())
+        assertEquals(listOf("ab"), events.finished().message.texts())
     }
 
     @Test

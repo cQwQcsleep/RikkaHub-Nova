@@ -90,6 +90,9 @@ import kotlin.uuid.Uuid
 
 private const val TAG = "ChatService"
 
+/** 自动折叠至少需要的历史消息条数，避免短对话里插入无意义的检查点 */
+private const val MIN_MESSAGES_TO_COMPACT = 6
+
 data class ChatError(
     val id: Uuid = Uuid.random(),
     val title: String? = null,
@@ -839,6 +842,10 @@ class ChatService(
         val promptTokens = conversation.currentMessages.lastOrNull()
             ?.lastRequestUsage()?.promptTokens ?: return
         if (!ContextCompactionPolicy.shouldCompact(promptTokens, model.contextLength)) return
+        // 刚开聊就触发折叠没有意义，也容易在短对话里误插检查点
+        val nodes = conversation.messageNodes
+        val checkpointIndex = nodes.indexOfLast { it.currentMessage.isContextCheckpoint }
+        if (nodes.size - checkpointIndex - 1 < MIN_MESSAGES_TO_COMPACT) return
         val keep = ContextCompactionPolicy.recentTailCount(
             messages = conversation.currentMessages,
             contextLength = model.contextLength,

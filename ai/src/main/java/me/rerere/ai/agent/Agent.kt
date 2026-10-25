@@ -1,7 +1,8 @@
 package me.rerere.ai.agent
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.channelFlow
 import me.rerere.ai.core.Tool
 import me.rerere.ai.provider.Provider
 import me.rerere.ai.provider.ProviderSetting
@@ -82,8 +83,16 @@ sealed interface AgentFinishReason {
  * 工具按调用顺序逐个执行，有任意一个需要审批时，同一批的工具都等审批后再一起执行。
  * 返回的 Flow 不切换调度器，Provider 请求和工具执行都在收集方的上下文里运行，需要时由调用方 flowOn。
  * 取消时直接抛出，最后一个 [AgentEvent.MessageUpdated] 就是取消前的状态，已经执行完的工具结果都在里面。
+ *
+ * 用 [channelFlow] 而不是 [flow]：流式预览由独立的帧定时器发出，和读取分片的协程不是同一个，
+ * `flow` 的收集器禁止跨协程发送，`channelFlow` 的 send 是线程安全的。
  */
-fun runAgent(request: AgentRequest, hooks: AgentHooks): Flow<AgentEvent> = flow {
+fun runAgent(request: AgentRequest, hooks: AgentHooks): Flow<AgentEvent> = channelFlow {
     require(request.maxSteps > 0) { "maxSteps must be positive" }
-    AgentLoop(request, hooks, this).run()
+    val collector = object : FlowCollector<AgentEvent> {
+        override suspend fun emit(value: AgentEvent) {
+            send(value)
+        }
+    }
+    AgentLoop(request, hooks, collector).run()
 }
