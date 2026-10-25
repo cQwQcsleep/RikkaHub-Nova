@@ -373,10 +373,17 @@ internal fun FilesPicker(
 
     // Compress Context Dialog
     if (showCompressDialog) {
-        CompressContextDialog(onDismiss = {
-            onShowCompressDialogChange(false)
-            onDismiss()
-        }, onConfirm = onCompressContext)
+        CompressContextDialog(
+            usedTokens = conversation.lastContextTokens(),
+            contextWindow = chatModel?.contextLength ?: 0,
+            assistant = assistant,
+            onUpdateAssistant = onUpdateAssistant,
+            onDismiss = {
+                onShowCompressDialogChange(false)
+                onDismiss()
+            },
+            onConfirm = onCompressContext,
+        )
     }
 }
 

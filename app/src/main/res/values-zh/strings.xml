@@ -266,6 +266,10 @@
   <string name="chat_page_compress_context">压缩历史</string>
   <string name="chat_page_compress_context_desc">将对话压缩为摘要以节省令牌</string>
   <string name="chat_page_compress_context_title">压缩对话历史</string>
+  <string name="chat_page_compress_current">当前</string>
+  <string name="chat_page_compress_next_fold">下次整理</string>
+  <string name="chat_page_compress_trigger_note">达到约 %1$s tokens 时自动整理上下文。</string>
+  <string name="chat_page_compress_now_title">立即压缩</string>
   <string name="chat_page_compressing">正在压缩...</string>
   <string name="chat_page_conversation_system_prompt">对话系统提示</string>
   <string name="chat_page_conversation_system_prompt_clear">清除</string>

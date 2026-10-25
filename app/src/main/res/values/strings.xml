@@ -266,6 +266,10 @@
   <string name="chat_page_compress_context">Compress History</string>
   <string name="chat_page_compress_context_desc">Compress the conversation into a summary to save tokens</string>
   <string name="chat_page_compress_context_title">Compress Conversation History</string>
+  <string name="chat_page_compress_current">Current</string>
+  <string name="chat_page_compress_next_fold">Next fold</string>
+  <string name="chat_page_compress_trigger_note">Context is folded automatically at about %1$s tokens.</string>
+  <string name="chat_page_compress_now_title">Compress now</string>
   <string name="chat_page_compressing">Compressing...</string>
   <string name="chat_page_conversation_system_prompt">Conversation System Prompt</string>
   <string name="chat_page_conversation_system_prompt_clear">Clear</string>
