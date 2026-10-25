@@ -569,6 +569,19 @@ internal fun AssistantBasicContent(
                 }
 
                 item(
+                    headlineContent = { Text(stringResource(R.string.assistant_page_compact_window)) },
+                    supportingContent = { Text(stringResource(R.string.assistant_page_compact_window_desc)) },
+                    trailingContent = {
+                        if (compactWindow > 0) {
+                            Text(
+                                text = "${compactWindow / 1000}k",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                    },
+                )
+
+                item(
                     headlineContent = { Text(stringResource(R.string.assistant_page_compact_capacity)) },
                     supportingContent = {
                         Text(stringResource(R.string.assistant_page_compact_capacity_desc))

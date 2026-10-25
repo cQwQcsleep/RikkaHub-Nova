@@ -1315,6 +1315,8 @@
   <string name="assistant_page_compact_threshold_desc">At least 1,000 tokens and below the 85% capacity guard.</string>
   <string name="assistant_page_compact_threshold_desc_known">At least 1,000 tokens; capacity guard is %1$d tokens.</string>
   <string name="assistant_page_compact_threshold_invalid">Threshold must be at least %1$d tokens.</string>
+  <string name="assistant_page_compact_window">Model window</string>
+  <string name="assistant_page_compact_window_desc">Context window declared by the selected model.</string>
   <string name="assistant_page_compact_capacity">Capacity guard</string>
   <string name="assistant_page_compact_capacity_desc">Fold at 85% of the model window; recent messages keep about 10%.</string>
   <string name="assistant_page_compact_no_window">Context window unavailable</string>

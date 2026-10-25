@@ -1295,6 +1295,8 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="assistant_page_compact_threshold_desc">至少 1,000 tokens，且低于 85% 容量保护。</string>
   <string name="assistant_page_compact_threshold_desc_known">至少 1,000 tokens；容量保护为 %1$d tokens。</string>
   <string name="assistant_page_compact_threshold_invalid">阈值至少需要 %1$d tokens。</string>
+  <string name="assistant_page_compact_window">模型窗口</string>
+  <string name="assistant_page_compact_window_desc">所选模型声明的上下文窗口。</string>
   <string name="assistant_page_compact_capacity">容量保护</string>
   <string name="assistant_page_compact_capacity_desc">模型窗口的 85% 自动整理，最近约 10% 的消息原样保留。</string>
   <string name="assistant_page_compact_no_window">模型未声明上下文窗口</string>
