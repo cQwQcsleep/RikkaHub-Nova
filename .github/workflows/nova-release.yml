@@ -68,21 +68,30 @@ jobs:
           VERSION_NAME=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -1)
           echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
-      # 生成一次性签名密钥；local.properties 的 storeFile 相对于 app 模块目录
-      - name: Generate signing key
+      # 优先使用仓库 Secret 里的固定签名密钥，保证多次发布之间可以覆盖安装；
+      # 没有配置 Secret 时（例如 fork）退化为一次性自签名密钥。
+      - name: Prepare signing key
+        env:
+          NOVA_KEYSTORE_B64: ${{ secrets.NOVA_KEYSTORE_B64 }}
+          NOVA_KEY_PASSWORD: ${{ secrets.NOVA_KEY_PASSWORD }}
         run: |
-          keytool -genkeypair -v \
-            -keystore app/nova-release.jks \
-            -alias nova \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass "${{ github.run_id }}nova" \
-            -keypass "${{ github.run_id }}nova" \
-            -dname "CN=Nova RikkaHub Fork, OU=CI, O=Nova, L=NA, S=NA, C=NA"
+          PASS="${NOVA_KEY_PASSWORD:-${{ github.run_id }}nova}"
+          if [ -n "$NOVA_KEYSTORE_B64" ]; then
+            echo "$NOVA_KEYSTORE_B64" | base64 -d > app/nova-release.jks
+          else
+            keytool -genkeypair -v \
+              -keystore app/nova-release.jks \
+              -alias nova \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$PASS" \
+              -keypass "$PASS" \
+              -dname "CN=Nova RikkaHub Fork, OU=CI, O=Nova, L=NA, S=NA, C=NA"
+          fi
           cat > local.properties <<EOF
           storeFile=nova-release.jks
-          storePassword=${{ github.run_id }}nova
+          storePassword=$PASS
           keyAlias=nova
-          keyPassword=${{ github.run_id }}nova
+          keyPassword=$PASS
           EOF
 
       - name: Provide compile-only Firebase config
