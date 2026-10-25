@@ -60,10 +60,10 @@ fun UIMessagePart.Image.encodeBase64(withPrefix: Boolean = true): Result<Encoded
             }
             val mimeType = file.guessMimeType().getOrThrow()
             // 统一进行压缩处理
-            val (encoded, outputMimeType) = file.compressAndEncode(mimeType)
+            val encoded = file.compressAndEncodeCached(mimeType)
             EncodedImage(
-                base64 = if (withPrefix) "data:$outputMimeType;base64,$encoded" else encoded,
-                mimeType = outputMimeType
+                base64 = if (withPrefix) "data:${encoded.mimeType};base64,${encoded.base64}" else encoded.base64,
+                mimeType = encoded.mimeType
             )
         }
 
@@ -111,6 +111,53 @@ fun UIMessagePart.Audio.encodeBase64(withPrefix: Boolean = true): Result<String>
         }
 
         else -> throw IllegalArgumentException("Unsupported URL format: $url")
+    }
+}
+
+/**
+ * 同一张图片在每次请求里都会被重新解码、压缩、编码成 base64。
+ *
+ * 历史里的图片是不可变的，因此按路径、修改时间与大小缓存编码结果。缓存按字符数计重，
+ * 超限时淘汰最久未使用的条目，避免把整段对话的图片都留在内存里。
+ */
+private fun File.compressAndEncodeCached(mimeType: String): EncodedImage {
+    val key = "$absolutePath|${lastModified()}|${length()}"
+    encodedImageCache.get(key)?.let { return it }
+    val (base64, outputMimeType) = compressAndEncode(mimeType)
+    return EncodedImage(base64 = base64, mimeType = outputMimeType)
+        .also { encodedImageCache.put(key, it) }
+}
+
+private val encodedImageCache = EncodedImageCache()
+
+internal class EncodedImageCache(private val maxChars: Int = 8 * 1024 * 1024) {
+    private class Entry(val image: EncodedImage, val weight: Int)
+
+    private val entries = LinkedHashMap<String, Entry>(16, 0.75f, true)
+    private var totalChars = 0
+
+    @Synchronized
+    fun get(key: String): EncodedImage? = entries[key]?.image
+
+    @Synchronized
+    fun put(key: String, image: EncodedImage) {
+        val weight = image.base64.length
+        entries.remove(key)?.let { totalChars -= it.weight }
+        entries[key] = Entry(image, weight)
+        totalChars += weight
+        // 从最久未使用的一端淘汰，直到总字符数回到上限以内
+        val iterator = entries.entries.iterator()
+        while (totalChars > maxChars && iterator.hasNext()) {
+            val eldest = iterator.next()
+            iterator.remove()
+            totalChars -= eldest.value.weight
+        }
+    }
+
+    @Synchronized
+    fun clear() {
+        entries.clear()
+        totalChars = 0
     }
 }
 

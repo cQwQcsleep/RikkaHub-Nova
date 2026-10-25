@@ -10,6 +10,30 @@ Click to join our Discord server 👉 [【RikkaHub】](https://discord.gg/9weBqx
 [简体中文](README_ZH_CN.md) | [繁體中文](README_ZH_TW.md) | English
 </div>
 
+## 🧬 Nova fork
+
+This repository is the **Nova** third-party fork of RikkaHub. It keeps upstream behavior and UI,
+and concentrates on prompt-cache efficiency and streaming cost:
+
+- **Cache diagnostics** — every request records the shape of its prefix (system prompt, tool
+  declarations, cumulative message chain) and compares it with the previous request of the same
+  conversation. Vendor usage remains the source of truth for hit/miss tokens; the shape explains
+  *why* a prefix missed (`system` / `tools` / `body` / `trim`), and long idle gaps are reported as a
+  cold resume using a per-vendor TTL (24h for DeepSeek, 5m for DashScope and Anthropic).
+  The approach follows Reasonix's `PrefixShape` diagnostics.
+- **Cache-stable prefixes** — tool declarations are sorted by name before they are sent, so MCP
+  servers that enumerate tools in a different order after a reconnect no longer invalidate the
+  provider-side prefix.
+- **Streaming hot path** — the OpenAI, Responses, Claude and Gemini paths serialize the request body
+  once per request instead of twice, skip log-string interpolation unless the level is enabled, and
+  merge chunks into a single assistant message without copying the whole message list per token.
+  Reasoning-tag extraction no longer re-scans the growing answer with a lazy regex.
+- **Repeated image encoding** — encoded images are cached by file identity with a bounded LRU, so
+  each request no longer decodes, re-compresses and base64-encodes the same history images.
+
+CI (`.github/workflows/nova-ci.yml`) builds the debug APK and runs unit tests; it uses a
+compile-only Firebase placeholder so no signing secrets are required.
+
 <div align="center">
   <img src="docs/img/poster.png" alt="RikkaHub" width="800" />
 </div>

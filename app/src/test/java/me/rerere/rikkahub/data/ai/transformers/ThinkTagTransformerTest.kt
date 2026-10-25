@@ -82,6 +82,39 @@ class ThinkTagTransformerTest {
         assertEquals(now, finishedResult.parts.filterIsInstance<UIMessagePart.Reasoning>().single().finishedAt)
     }
 
+    // 流式输出改为字符串扫描后，匹配结果必须与原来的正则完全一致
+    @Test
+    fun `string scan agrees with the legacy regex`() {
+        val legacy = Regex("\\A\\s*<think>([\\s\\S]*?)(</think>|$)")
+        val cases = listOf(
+            "",
+            "plain answer",
+            "<think>reason</think>answer",
+            "   \n\t<think>reason</think>\n\nanswer",
+            "<think>reason only",
+            "<think>",
+            "<think></think>",
+            "<think></think><think>second",
+            "  <thinker>not a tag",
+            "<think>a</think>b</think>c",
+            "answer <think>literal",
+            "　<think>ideographic space is not regex whitespace</think>",
+        )
+
+        cases.forEach { text ->
+            val expected = legacy.find(text)
+            val actual = findLeadingThinkTag(text)
+            if (expected == null) {
+                assertNull("expected no match for <$text>", actual)
+            } else {
+                requireNotNull(actual) { "expected a match for <$text>" }
+                assertEquals("content of <$text>", expected.groupValues[1], actual.content)
+                assertEquals("closing tag of <$text>", expected.groupValues[2] == "</think>", actual.hasClosingTag)
+                assertEquals("end of <$text>", expected.range.last + 1, actual.end)
+            }
+        }
+    }
+
     private fun transform(text: String): UIMessage {
         val message = UIMessage.assistant(text)
         return listOf(message).transformThinkTags(now, generationFinished = true).single()
