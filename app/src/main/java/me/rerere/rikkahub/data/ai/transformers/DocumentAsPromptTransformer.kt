@@ -73,7 +73,11 @@ object DocumentAsPromptTransformer : InputMessageTransformer {
         if (!file.exists() || !file.isFile) {
             return "[ERROR, file not found: ${document.fileName}]"
         }
-        return runCatching {
+        // 上传的文档是不可变的，但每次请求（多步工具调用时每步一次）都会重新解析。
+        // 解析结果按文件标识缓存，避免反复读整个 PDF/DOCX。
+        val key = "${file.absolutePath}|${file.lastModified()}|${file.length()}|${document.mime}"
+        documentTextCache.get(key)?.let { return it }
+        val content = runCatching {
             when (document.mime) {
                 "application/pdf" -> parsePdfAsText(file)
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> parseDocxAsText(file)
@@ -82,7 +86,32 @@ object DocumentAsPromptTransformer : InputMessageTransformer {
                 else -> file.readText()
             }
         }.getOrElse {
-            "[ERROR, failed to read file: ${document.fileName}]"
+            return "[ERROR, failed to read file: ${document.fileName}]"
+        }
+        documentTextCache.put(key, content)
+        return content
+    }
+}
+
+private val documentTextCache = DocumentTextCache()
+
+/** 按字符数计重的文档解析缓存，超出上限时淘汰最久未使用的一项 */
+private class DocumentTextCache(private val maxChars: Int = 4 * 1024 * 1024) {
+    private val entries = LinkedHashMap<String, String>(8, 0.75f, true)
+    private var totalChars = 0
+
+    @Synchronized
+    fun get(key: String): String? = entries[key]
+
+    @Synchronized
+    fun put(key: String, value: String) {
+        entries.remove(key)?.let { totalChars -= it.length }
+        entries[key] = value
+        totalChars += value.length
+        val iterator = entries.entries.iterator()
+        while (totalChars > maxChars && iterator.hasNext()) {
+            totalChars -= iterator.next().value.length
+            iterator.remove()
         }
     }
 }
