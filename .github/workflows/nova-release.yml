@@ -94,13 +94,15 @@ jobs:
           keyPassword=$PASS
           EOF
 
-      - name: Provide compile-only Firebase config
-        run: cp ci/google-services.json app/google-services.json
-
       - name: Build release APK
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleGithubRelease --stacktrace
+
+      # 附带一个未混淆的 debug 包（包名带 .debug，可与 release 共存），
+      # 便于在 release 包出现启动问题时快速判断是否为 R8 混淆导致
+      - name: Build debug APK
+        run: ./gradlew :app:assembleGithubDebug --stacktrace
 
       - name: Collect artifacts
         id: artifacts
@@ -126,7 +128,10 @@ jobs:
           body: |
             RikkaHub Nova 第三方分支构建（commit `${{ github.sha }}`）。
 
-            - APK 由 CI 用一次性自签名密钥签名，可直接安装
+            - APK 由 CI 用固定自签名密钥签名，可直接安装，后续版本可覆盖升级
             - `universal` 为全 ABI 包，其余按 ABI 拆分
-            - 缓存诊断与性能改动见仓库 README
-          files: app/build/outputs/apk/github/release/*.apk
+            - fork 已移除 Firebase 分析/崩溃上报，不需要 google-services 配置
+            - `-debug` 包未混淆、包名带 `.debug`，用于排查 release 包的启动问题
+          files: |
+            app/build/outputs/apk/github/release/*.apk
+            app/build/outputs/apk/github/debug/*universal*.apk

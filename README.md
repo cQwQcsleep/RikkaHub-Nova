@@ -30,9 +30,11 @@ and concentrates on prompt-cache efficiency and streaming cost:
   Reasoning-tag extraction no longer re-scans the growing answer with a lazy regex.
 - **Repeated image encoding** — encoded images are cached by file identity with a bounded LRU, so
   each request no longer decodes, re-compresses and base64-encodes the same history images.
+- **No Firebase** — analytics and Crashlytics are removed so a self-built fork needs no
+  `google-services.json`; upstream's placeholder-free builds still require their own Firebase project.
 
-CI (`.github/workflows/nova-ci.yml`) builds the debug APK and runs unit tests; it uses a
-compile-only Firebase placeholder so no signing secrets are required.
+CI (`.github/workflows/nova-ci.yml`) builds the debug APK and runs unit tests, and
+`.github/workflows/nova-release.yml` publishes signed APKs to Releases.
 
 <div align="center">
   <img src="docs/img/poster.png" alt="RikkaHub" width="800" />
