@@ -27,7 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Size
@@ -38,8 +38,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.isActive
+import kotlin.math.exp
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
@@ -117,12 +117,24 @@ private fun rememberReasoningState(reasoning: UIMessagePart.Reasoning): Pair<Rea
         }
     }
 
-    // 流式时跟随最新内容。布局变化用 conflate 合并，并且直接贴底而不是每帧重启动一个滚动动画
+    // 流式时连续跟随最新内容：按显示帧做指数缓动，不重启动画，
+    // 300–1000 token/s 时也能保持平滑且不落后太多
     if (loading) {
         LaunchedEffect(scrollState) {
-            snapshotFlow { scrollState.maxValue }
-                .conflate()
-                .collect { scrollState.scrollTo(it) }
+            var lastFrame = 0L
+            while (isActive) {
+                val frame = withFrameNanos { it }
+                val dtMs = if (lastFrame == 0L) 16f else ((frame - lastFrame) / 1_000_000f).coerceIn(1f, 64f)
+                lastFrame = frame
+                val target = scrollState.maxValue
+                val current = scrollState.value
+                if (target != current) {
+                    // 时间常数约 60ms：增长越快跟得越紧，增长停下时平滑收尾
+                    val alpha = (1f - exp(-dtMs / 60f)).coerceIn(0.08f, 0.8f)
+                    val next = (current + (target - current) * alpha).toInt().coerceIn(0, target)
+                    scrollState.scrollTo(next)
+                }
+            }
         }
     }
 

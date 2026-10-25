@@ -9,8 +9,9 @@ import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.sum
 import me.rerere.ai.provider.TextGenerationParams
-import me.rerere.ai.ui.StreamChunkHandler
 import me.rerere.ai.ui.ToolApprovalState
+import me.rerere.ai.ui.StreamingMessageAccumulator
+import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishReasoning
@@ -22,6 +23,9 @@ import kotlin.time.TimeSource
 
 // 输出为空的工具会被当成没执行过，之后每一步都会再执行一次，所以换成占位文本
 private const val EMPTY_TOOL_OUTPUT = "(no output)"
+
+// 流式快照的最小间隔，约一帧；显示更快的快照没有意义，只会增加拷贝
+private const val FRAME_INTERVAL_MS = 16L
 
 private class StreamChunkHandlingException(override val cause: Throwable) : RuntimeException(cause)
 
@@ -110,14 +114,22 @@ internal class AgentLoop(
             withRetry(request.retry, onRetry = { events.emit(AgentEvent.Retrying(it)) }) {
                 // 每次重试都从本步开始时的消息重新合并，不会把重试的响应接在已经展示的半截回复后面；
                 // 各次尝试共用同一个消息 id，调用方直接覆盖即可。
-                val handler = StreamChunkHandler(params.model)
+                val accumulator = StreamingMessageAccumulator(params.model)
                 var attempt = stepStart
                 var firstChunk: TimeMark? = null
+                var lastEmitAt = 0L
                 request.provider.streamText(request.providerSetting, messages, params).collect { chunk ->
                     try {
                         val mark = firstChunk ?: TimeSource.Monotonic.markNow().also { firstChunk = it }
-                        attempt = handler.apply(attempt, chunk)
-                        preview(attempt.withStepStats(base, mark.elapsedNow()), newPartsFrom = base.parts.size)
+                        // 只累积分片（文本用 StringBuilder 追加）；快照按显示帧生成，
+                        // 1000 token/s 时每秒最多 60 次拷贝，而不是每个 token 复制一遍已有正文
+                        accumulator.consume(chunk)
+                        val now = System.nanoTime() / 1_000_000
+                        if (chunk is StreamChunk.Finish || now - lastEmitAt >= FRAME_INTERVAL_MS) {
+                            lastEmitAt = now
+                            attempt = accumulator.build(stepStart)
+                            preview(attempt.withStepStats(base, mark.elapsedNow()), newPartsFrom = base.parts.size)
+                        }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Throwable) {
@@ -125,6 +137,8 @@ internal class AgentLoop(
                         throw StreamChunkHandlingException(e)
                     }
                 }
+                // 流可能没有 Finish，最终状态由这里确定
+                attempt = accumulator.build(stepStart)
                 attempt.withStepStats(base, firstChunk?.elapsedNow() ?: Duration.ZERO)
             }
         } catch (e: StreamChunkHandlingException) {

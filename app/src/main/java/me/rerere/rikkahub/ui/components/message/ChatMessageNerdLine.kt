@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.toJavaLocalDateTime
 import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Layers01
 import me.rerere.hugeicons.stroke.Repeat
@@ -69,9 +70,12 @@ fun ChatMessageNerdLine(
 ) {
     val settings = LocalSettings.current
     val usage = message.usage
-    if (!settings.displaySetting.showTokenUsage || usage == null) return
+    if (!settings.displaySetting.showTokenUsage) return
+    // 生成过程中 usage 还没回来，但小卡片要能实时刷新，先用流式内容估算
+    val live = usage == null && message.finishedAt == null
+    if (usage == null && !live) return
 
-    val stats = remember(message) { message.nerdStats(usage) }
+    val stats = remember(message, live) { message.nerdStats(usage, live) }
     // 消息里的模型快照不带上下文窗口，只能从设置里按 ID 找；模型被删了就不显示窗口大小
     val contextLength = remember(settings.providers, message.modelId) {
         settings.findModelById(message.modelId)?.contextLength?.takeIf { it > 0 }
@@ -102,28 +106,48 @@ fun ChatMessageNerdLine(
                         .clickable { scope.launch { tooltipState.show() } }
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                 ) {
-                    if (stats.steps > 1) {
+                    if (stats.live) {
                         StatsItem(
-                            icon = { StatsIcon(HugeIcons.Repeat, stringResource(R.string.chat_message_usage_step_count)) },
-                            content = { Text(text = stringResource(R.string.chat_message_usage_steps, stats.steps)) }
-                        )
-                    }
-                    if (stats.tps != null) {
-                        StatsItem(
-                            icon = { StatsIcon(HugeIcons.Zap, stringResource(R.string.chat_message_usage_speed)) },
-                            content = { Text(text = stats.tps.label(stats.speedEstimated)) }
-                        )
-                    }
-                    StatsItem(
-                        icon = { StatsIcon(HugeIcons.Layers01, stringResource(R.string.chat_message_usage_context)) },
-                        content = {
-                            Text(text = stringResource(R.string.chat_message_usage_context_short, stats.contextTokens.formatNumber()))
-                            val cached = stats.lastUsage.cachedTokens
-                            if (cached > 0) {
-                                Text(text = stringResource(R.string.chat_message_usage_cached_short, cached.formatNumber()))
+                            icon = { StatsIcon(HugeIcons.Layers01, stringResource(R.string.chat_message_usage_output)) },
+                            content = {
+                                Text(
+                                    text = stringResource(
+                                        R.string.chat_message_usage_live_tokens,
+                                        stats.outputTokens.formatNumber(),
+                                    )
+                                )
                             }
+                        )
+                        if (stats.tps != null) {
+                            StatsItem(
+                                icon = { StatsIcon(HugeIcons.Zap, stringResource(R.string.chat_message_usage_speed)) },
+                                content = { Text(text = stats.tps.label(estimated = true)) }
+                            )
                         }
-                    )
+                    } else {
+                        if (stats.steps > 1) {
+                            StatsItem(
+                                icon = { StatsIcon(HugeIcons.Repeat, stringResource(R.string.chat_message_usage_step_count)) },
+                                content = { Text(text = stringResource(R.string.chat_message_usage_steps, stats.steps)) }
+                            )
+                        }
+                        if (stats.tps != null) {
+                            StatsItem(
+                                icon = { StatsIcon(HugeIcons.Zap, stringResource(R.string.chat_message_usage_speed)) },
+                                content = { Text(text = stats.tps.label(stats.speedEstimated)) }
+                            )
+                        }
+                        StatsItem(
+                            icon = { StatsIcon(HugeIcons.Layers01, stringResource(R.string.chat_message_usage_context)) },
+                            content = {
+                                Text(text = stringResource(R.string.chat_message_usage_context_short, stats.contextTokens.formatNumber()))
+                                val cached = stats.lastUsage.cachedTokens
+                                if (cached > 0) {
+                                    Text(text = stringResource(R.string.chat_message_usage_cached_short, cached.formatNumber()))
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -136,6 +160,19 @@ private fun UsageDetails(stats: NerdStats, contextLength: Int?) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier.padding(vertical = 4.dp),
     ) {
+        if (stats.live) {
+            UsageDetailRow(
+                stringResource(R.string.chat_message_usage_output),
+                "~${stats.outputTokens.exact()}",
+            )
+            stats.durationMillis?.let {
+                UsageDetailRow(stringResource(R.string.chat_message_usage_duration), it.asDuration())
+            }
+            stats.tps?.let {
+                UsageDetailRow(stringResource(R.string.chat_message_usage_speed), it.label(estimated = true))
+            }
+            return@Column
+        }
         val total = stats.total
         ContextUsageBar(
             lastUsage = stats.lastUsage,
@@ -307,11 +344,40 @@ private data class NerdStats(
     val tps: Float?,
     val speedEstimated: Boolean = false,
     val cacheHitRate: Float? = null,
+    val live: Boolean = false,
+    val outputTokens: Int = 0,
 )
 
-private fun UIMessage.nerdStats(usage: TokenUsage): NerdStats {
-    val last = lastRequestUsage() ?: usage
+/** [usage] 为空表示还在流式生成，用已生成字符估算，生成结束后会被厂商返回的真实用量替换 */
+private fun UIMessage.nerdStats(usage: TokenUsage?, live: Boolean): NerdStats {
+    val last = lastRequestUsage() ?: usage ?: TokenUsage()
     val steps = stepCount ?: 1
+    if (live) {
+        val chars = parts.sumOf { part ->
+            when (part) {
+                is UIMessagePart.Text -> part.text.length
+                is UIMessagePart.Reasoning -> part.reasoning.length
+                else -> 0
+            }
+        }
+        // 约 4 字符 1 token；中英混排也接近，只用于生成过程中的实时反馈
+        val estimatedTokens = (chars / 4f).toInt().coerceAtLeast(if (chars > 0) 1 else 0)
+        val duration = generationTimeMs?.takeIf { it > 0 }
+        return NerdStats(
+            total = usage ?: TokenUsage(),
+            lastUsage = last,
+            steps = steps,
+            contextTokens = last.promptTokens + last.completionTokens,
+            durationMillis = duration,
+            tps = duration?.takeIf { estimatedTokens > 0 }
+                ?.let { estimatedTokens.toFloat() / it * 1000f }
+                ?.takeIf { it.isFinite() && it > 0f },
+            speedEstimated = true,
+            live = true,
+            outputTokens = estimatedTokens,
+        )
+    }
+    val completed = requireNotNull(usage)
     // 优先使用逐步骤累计的生成耗时；旧消息没有这个字段时，只有单步消息能用创建到完成
     // 的间隔粗略估算——多步消息的间隔里还包含工具执行与审批等待，拿来算速度会明显偏低
     val measuredDuration = generationTimeMs?.takeIf { it > 0 }
@@ -327,14 +393,14 @@ private fun UIMessage.nerdStats(usage: TokenUsage): NerdStats {
     }
     val durationMillis = measuredDuration ?: estimatedDuration
     return NerdStats(
-        total = usage,
+        total = completed,
         lastUsage = last,
         steps = steps,
         contextTokens = last.promptTokens + last.completionTokens,
         durationMillis = durationMillis,
         // 输出 token 与生成耗时都按步骤累计，二者相除才是一整段生成的平均速度
-        tps = durationMillis?.takeIf { usage.completionTokens > 0 }
-            ?.let { usage.completionTokens.toFloat() / it * 1000f }
+        tps = durationMillis?.takeIf { completed.completionTokens > 0 }
+            ?.let { completed.completionTokens.toFloat() / it * 1000f }
             ?.takeIf { it.isFinite() && it > 0f },
         speedEstimated = measuredDuration == null && estimatedDuration != null,
         cacheHitRate = last.promptTokens.takeIf { it > 0 && last.cachedTokens > 0 }

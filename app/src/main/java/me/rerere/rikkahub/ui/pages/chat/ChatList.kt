@@ -311,7 +311,7 @@ private fun ChatListNormal(
                         if (state.isScrollInProgress || !loadingState) return@collect
                         if (!visibleItemsInfo.isAtBottom()) return@collect
                         val now = android.os.SystemClock.uptimeMillis()
-                        if (now - lastRequestAt < 50L) return@collect
+                        if (now - lastRequestAt < 16L) return@collect
                         lastRequestAt = now
                         state.requestScrollToItem(conversationUpdated.messageNodes.lastIndex + 10)
                     }

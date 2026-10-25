@@ -45,8 +45,10 @@ import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.prompts.buildCompressPrompt
+import me.rerere.rikkahub.data.ai.ContextCompactionPolicy
 import me.rerere.rikkahub.data.ai.tools.InvalidMcpServerNamesException
 import me.rerere.rikkahub.data.ai.tools.shouldUseExternalWebSearch
+import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.event.AppEvent
@@ -587,6 +589,9 @@ class ChatService(
         var senderName = ""
         try {
             val settings = settingsStore.awaitLoaded()
+            // 接近窗口上限时先折叠历史：摘要请求复用同一前缀，既避免整段请求被截断，
+            // 也让折叠本身按缓存价计费（阈值与保留区比例同 Reasonix）
+            autoCompactIfNeeded(session, settings)
             // 清掉上一轮的建议；没法继续执行的工具调用发给模型会被拒绝，先去掉。
             // 重新生成时只清理要发给模型的节点，被重新生成的节点保持原样，旧回复留作分支
             val conversation = session.update { latest ->
@@ -817,55 +822,89 @@ class ChatService(
         keepRecentMessages: Int = 0,
     ): Result<Unit> = runCatching {
         withLoadedSession<Unit>(conversationId) { session ->
-            // 生成中的回复还没写完，压缩不到它，检查点也不能插到它前面
-            check(!session.isGenerating) { context.getString(R.string.chat_page_compress_blocked_generating) }
-
-            val conversation = session.state.value
-            val nodes = conversation.messageNodes
-            val checkpointIndex = nodes.indexOfLast { it.currentMessage.isContextCheckpoint }
-            // 压缩范围是 (checkpointIndex, endIndex)，之后的节点原样保留
-            val endIndex = nodes.size - keepRecentMessages.coerceAtLeast(0)
-            // 上一个检查点之后没有可压缩的消息
-            if (endIndex <= checkpointIndex + 1) {
-                throw IllegalStateException(
-                    context.getString(
-                        if (keepRecentMessages > 0) {
-                            R.string.chat_page_compress_not_enough_messages
-                        } else {
-                            R.string.chat_page_compress_nothing_to_compress
-                        }
-                    )
-                )
-            }
-            // 未完成的工具调用没有结果，请求会被服务端拒绝；压到检查点之前也再不会执行。
-            // 保留区里的不发给压缩请求，压缩后照常留在检查点之后，不用检查
-            check(nodes.subList(checkpointIndex + 1, endIndex).none { node ->
-                node.currentMessage.getTools().any { it.isPending || it.canResumeExecution }
-            }) { context.getString(R.string.chat_page_compress_handle_pending_tools) }
-
-            // 必须和对话用同一个模型、同一套请求组装，才能命中提示词缓存
-            val turn = requestFactory.createContext(settingsStore.awaitLoaded(), conversation)
-            val summary = requestFactory.generateCompressionSummary(
-                turn = turn,
-                messages = conversation.currentMessages.take(endIndex),
-                compressPrompt = buildCompressPrompt(
-                    additionalPrompt = additionalPrompt,
-                    locale = Locale.getDefault().displayName,
-                ),
-            )
-
-            // 原消息原样保留，摘要插在压缩范围的最后一条消息之后。摘要生成期间对话可能已变化，
-            // 因此按节点定位插入到最新状态。
-            session.update { latest ->
-                check(!session.isGenerating) { context.getString(R.string.chat_page_compress_blocked_generating) }
-                val updated = latest.insertContextCheckpoint(
-                    afterNodeId = nodes[endIndex - 1].id,
-                    summary = summary,
-                ) ?: throw IllegalStateException(context.getString(R.string.chat_page_compress_conversation_changed))
-                updated.copy(chatSuggestions = emptyList())
-            }
-            session.flush()
+            compressSession(session, additionalPrompt, keepRecentMessages)
         }
+    }
+
+    /**
+     * 主动折叠：上一次请求已经用到模型窗口的 85% 时，先按 Reasonix 的阈值压缩历史。
+     *
+     * 摘要请求与正常对话使用同一套请求组装，前缀完全一致，所以折叠本身也能命中提示词缓存；
+     * 最近约 10% 窗口的消息原样保留在检查点之后，避免刚说过的话被折叠掉。
+     * 失败时只记录日志，不影响本轮回复。
+     */
+    private suspend fun autoCompactIfNeeded(session: ConversationSession, settings: Settings) {
+        val conversation = session.state.value
+        val model = settings.getChatModelOf(conversation) ?: return
+        val promptTokens = conversation.currentMessages.lastOrNull()
+            ?.lastRequestUsage()?.promptTokens ?: return
+        if (!ContextCompactionPolicy.shouldCompact(promptTokens, model.contextLength)) return
+        val keep = ContextCompactionPolicy.recentTailCount(
+            messages = conversation.currentMessages,
+            contextLength = model.contextLength,
+        )
+        runCatching { compressSession(session, additionalPrompt = "", keepRecentMessages = keep) }
+            .onSuccess {
+                Log.i(TAG, "autoCompact: ${promptTokens}/${model.contextLength}, keep $keep messages")
+            }
+            .onFailure {
+                Log.w(TAG, "autoCompact failed", it)
+            }
+    }
+
+    private suspend fun compressSession(
+        session: ConversationSession,
+        additionalPrompt: String,
+        keepRecentMessages: Int,
+    ) {
+        // 生成中的回复还没写完，压缩不到它，检查点也不能插到它前面
+        check(!session.isGenerating) { context.getString(R.string.chat_page_compress_blocked_generating) }
+
+        val conversation = session.state.value
+        val nodes = conversation.messageNodes
+        val checkpointIndex = nodes.indexOfLast { it.currentMessage.isContextCheckpoint }
+        // 压缩范围是 (checkpointIndex, endIndex)，之后的节点原样保留
+        val endIndex = nodes.size - keepRecentMessages.coerceAtLeast(0)
+        // 上一个检查点之后没有可压缩的消息
+        if (endIndex <= checkpointIndex + 1) {
+            throw IllegalStateException(
+                context.getString(
+                    if (keepRecentMessages > 0) {
+                        R.string.chat_page_compress_not_enough_messages
+                    } else {
+                        R.string.chat_page_compress_nothing_to_compress
+                    }
+                )
+            )
+        }
+        // 未完成的工具调用没有结果，请求会被服务端拒绝；压到检查点之前也再不会执行。
+        // 保留区里的不发给压缩请求，压缩后照常留在检查点之后，不用检查
+        check(nodes.subList(checkpointIndex + 1, endIndex).none { node ->
+            node.currentMessage.getTools().any { it.isPending || it.canResumeExecution }
+        }) { context.getString(R.string.chat_page_compress_handle_pending_tools) }
+
+        // 必须和对话用同一个模型、同一套请求组装，才能命中提示词缓存
+        val turn = requestFactory.createContext(settingsStore.awaitLoaded(), conversation)
+        val summary = requestFactory.generateCompressionSummary(
+            turn = turn,
+            messages = conversation.currentMessages.take(endIndex),
+            compressPrompt = buildCompressPrompt(
+                additionalPrompt = additionalPrompt,
+                locale = Locale.getDefault().displayName,
+            ),
+        )
+
+        // 原消息原样保留，摘要插在压缩范围的最后一条消息之后。摘要生成期间对话可能已变化，
+        // 因此按节点定位插入到最新状态。
+        session.update { latest ->
+            check(!session.isGenerating) { context.getString(R.string.chat_page_compress_blocked_generating) }
+            val updated = latest.insertContextCheckpoint(
+                afterNodeId = nodes[endIndex - 1].id,
+                summary = summary,
+            ) ?: throw IllegalStateException(context.getString(R.string.chat_page_compress_conversation_changed))
+            updated.copy(chatSuggestions = emptyList())
+        }
+        session.flush()
     }
 
     // ---- 聊天页配置 ----

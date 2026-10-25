@@ -341,8 +341,6 @@ private fun MessagePartsBlock(
                     ChainOfThought(
                         steps = block.steps,
                         collapsedAdaptiveWidth = isReasoningOnlyBlock,
-                        // 流式中内容每帧都在变高，尺寸动画会不断重启并和内部动画叠加，生成结束后再启用
-                        animateContentSize = !loading,
                         cardColors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
                         ),
@@ -389,9 +387,6 @@ private fun MessagePartsBlock(
             is MessagePartBlock.ContentBlock -> key(block.index) {
                 when (val part = block.part) {
                     is UIMessagePart.Text -> {
-                        // 流式生成时文本每个 token 都在长高，尺寸动画会被反复重启并造成布局抖动；
-                        // 生成结束后内容稳定，再对后续变化启用动画
-                        val sizeAnimation = if (loading) Modifier else Modifier.animateContentSize()
                         val textContent = @Composable {
                             if (role == MessageRole.USER) {
                                 ChatMessageBubble(
@@ -401,7 +396,7 @@ private fun MessagePartsBlock(
                                     // 用户气泡不占满整行，和助手的回复错开
                                     modifier = Modifier
                                         .padding(start = 24.dp)
-                                        .then(sizeAnimation),
+                                        .animateContentSize(),
                                 ) {
                                     MarkdownBlock(
                                         content = part.text.replaceRegexes(
@@ -417,7 +412,7 @@ private fun MessagePartsBlock(
                                     ChatMessageBubble(
                                         role = role,
                                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
-                                        modifier = sizeAnimation,
+                                        modifier = Modifier.animateContentSize(),
                                     ) {
                                         MarkdownBlock(
                                             content = part.text.replaceRegexes(
@@ -436,7 +431,8 @@ private fun MessagePartsBlock(
                                             visual = true,
                                         ),
                                         onClickCitation = handleClickCitation,
-                                        modifier = sizeAnimation,
+                                        modifier = Modifier
+                                            .animateContentSize()
                                     )
                                 }
                             }
