@@ -1,6 +1,11 @@
 package me.rerere.ai.agent
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -11,7 +16,6 @@ import me.rerere.ai.core.sum
 import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.StreamingMessageAccumulator
-import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.finishReasoning
@@ -117,29 +121,55 @@ internal class AgentLoop(
                 val accumulator = StreamingMessageAccumulator(params.model)
                 var attempt = stepStart
                 var firstChunk: TimeMark? = null
-                var lastEmitAt = 0L
-                request.provider.streamText(request.providerSetting, messages, params).collect { chunk ->
-                    try {
-                        val mark = firstChunk ?: TimeSource.Monotonic.markNow().also { firstChunk = it }
-                        // 只累积分片（文本用 StringBuilder 追加）；快照按显示帧生成，
-                        // 1000 token/s 时每秒最多 60 次拷贝，而不是每个 token 复制一遍已有正文
-                        accumulator.consume(chunk)
-                        val now = System.nanoTime() / 1_000_000
-                        if (chunk is StreamChunk.Finish || now - lastEmitAt >= FRAME_INTERVAL_MS) {
-                            lastEmitAt = now
-                            attempt = accumulator.build(stepStart)
-                            preview(attempt.withStepStats(base, mark.elapsedNow()), newPartsFrom = base.parts.size)
+                coroutineScope {
+                    // 快照与预览按显示帧节流：分片只做累积，300–1000 token/s 时每秒最多 60 次
+                    // 消息拷贝，而不是每个 token 复制一遍已有正文
+                    val ticker = launch {
+                        while (isActive) {
+                            delay(FRAME_INTERVAL_MS)
+                            // 还没收到任何分片时没有可展示的新内容
+                            if (firstChunk == null) continue
+                            try {
+                                attempt = accumulator.build(stepStart)
+                                preview(
+                                    attempt.withStepStats(base, firstChunk?.elapsedNow() ?: Duration.ZERO),
+                                    newPartsFrom = base.parts.size,
+                                )
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Throwable) {
+                                // 下游 UI 或变换失败不属于网络故障，不能触发模型请求重试
+                                throw StreamChunkHandlingException(e)
+                            }
                         }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        // 合并失败或下游处理失败都不是网络故障，不能重放模型请求
-                        throw StreamChunkHandlingException(e)
+                    }
+                    try {
+                        request.provider.streamText(request.providerSetting, messages, params).collect { chunk ->
+                            try {
+                                firstChunk = firstChunk ?: TimeSource.Monotonic.markNow()
+                                accumulator.consume(chunk)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Throwable) {
+                                // 合并失败或下游处理失败都不是网络故障，不能重放模型请求
+                                throw StreamChunkHandlingException(e)
+                            }
+                        }
+                    } finally {
+                        ticker.cancelAndJoin()
                     }
                 }
-                // 流可能没有 Finish，最终状态由这里确定
+                // 流可能没有 Finish，最终状态由这里确定；结束前再预览一次，避免最后一帧内容没显示出来
                 attempt = accumulator.build(stepStart)
-                attempt.withStepStats(base, firstChunk?.elapsedNow() ?: Duration.ZERO)
+                val finished = attempt.withStepStats(base, firstChunk?.elapsedNow() ?: Duration.ZERO)
+                try {
+                    preview(finished, newPartsFrom = base.parts.size)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    throw StreamChunkHandlingException(e)
+                }
+                finished
             }
         } catch (e: StreamChunkHandlingException) {
             throw e.cause

@@ -22,8 +22,9 @@ Nova keeps upstream behavior and UI, and concentrates on prompt-cache efficiency
 | Streaming hot path | Request bodies are serialized once instead of twice, log strings are only built when the level is enabled, and chunks are merged into one assistant message without copying the whole message list per token. |
 | Reasoning tags | The leading `<think>` block is found with a linear scan instead of a lazy regex that re-scanned the growing answer every token. |
 | Repeated encoding | Encoded images and parsed documents are cached by file identity with bounded LRUs, so history images/PDFs are no longer decoded and re-encoded on every request. |
-| UI cost | Content-size animations no longer restart on every streaming token, the reasoning preview follows new text with a conflated scroll instead of restarting a scroll animation per token, the auto-follow scroll is throttled, and the animated mesh background is sampled at 20 fps. |
-| Data display | Token speed is computed from consistently measured fields (multi-step totals), cache hit rate is shown, and duration/speed formatting adapts to magnitude. |
+| UI cost | Animations are kept, but streaming snapshots are frame-coalesced (≤60/s) so size animations restart once per frame instead of once per token; the reasoning preview follows with a continuous eased scroll; the animated mesh background is sampled at 20 fps. |
+| Data display | Token speed is computed from consistently measured fields (multi-step totals), cache hit rate is shown, and the usage card updates live during generation with estimated tokens/speed. |
+| Compaction | Automatic context folding follows Reasonix's thresholds: fold at 85% of the window, keep the most recent ~10% verbatim, cap the checkpoint at 50%, and reuse the exact request prefix so the summary call itself hits the cache. |
 | No Firebase | Analytics and Crashlytics are removed; self-built forks no longer need `google-services.json`. |
 | About page | Adds fork identity, both authors, links to this repository and upstream, and a list of differences. |
 
@@ -128,6 +129,20 @@ Everything below is either committed in the repository or generated at build tim
 | Material color utilities | `material3/material-color-utilities` | Git submodule pinned to a commit; `git submodule update --init --recursive` before building. |
 | Web UI output | `web-ui/` → `web/src/main/resources/static` | `:web:preBuild` runs `pnpm run build` and copies the output; the destination is git-ignored. |
 | Translations | `app/src/main/res/values*/strings.xml`, module-level `values*/strings.xml` | Added/validated with `tools/i18n` (Bun CLI). |
+
+## 📈 Performance profile
+
+A 388-sample thread profile recorded while streaming a long reasoning answer showed where the CPU actually goes:
+
+| Thread | Mean | Max | Reading |
+|---|---|---|---|
+| `RenderThread` | 41.6% | 60.9% | compose draw + text rasterization of the growing message |
+| `mali-cmar-backend` | 24.6% | 36.8% | GPU command submission / rasterization |
+| `HeapTaskDaemon` | 11.8% | 75.0% | GC caused by per-token string and list churn |
+| `ReferenceQueueDaemon` | 6.0% | 19.9% | reference processing for the same churn |
+| `DefaultDispatcher-*` | ~4% each, bursts to ~50% | | background markdown parsing, cache hashing, JSON |
+
+Rendering plus rasterization accounts for roughly two thirds of app CPU, GC for about a sixth, and background compute is a minority. That is why this fork does **not** rewrite the streaming stack in another language: the cost is not compute-bound, it is allocation and draw-bound. The changes target those instead — frame-coalesced snapshots with `StringBuilder` accumulation, bounded encode/parse caches, 20 fps background sampling, and removing redundant animation restarts. If a future profile shows a single compute hotspot dominating, a native module becomes worthwhile; the measurement, not the language, decides.
 
 ## 🔍 Prompt-cache internals
 
