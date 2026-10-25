@@ -85,7 +85,7 @@ class ThinkTagTransformerTest {
     // 流式输出改为字符串扫描后，匹配结果必须与原来的正则完全一致
     @Test
     fun `string scan agrees with the legacy regex`() {
-        val legacy = Regex("\\A\\s*<think>([\\s\\S]*?)(</think>|$)")
+        val legacy = Regex("""\A\s*<think>([\s\S]*?)(</think>|$)""")
         val cases = listOf(
             "",
             "plain answer",
