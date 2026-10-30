@@ -31,6 +31,15 @@
 | 上游锚点 | Reasonix `internal/runtime/agent/compact.go`、`compact_retention.go` @ `e1c38d3036`（2026-10-25）；常量可见 `context_budget.go` |
 | 本分支提交 | `13b56336`（引入策略）、`343243df`（设置 UI 对齐）、`1eec7af8`、`948571fc`（手动面板对齐） |
 
+## 上游跟进记录（清单内）
+
+| 日期 | 上游提交 | 触及清单项 | 结论 |
+|---|---|---|---|
+| 2026-10-30 | `3baa8532b` fix(agent): charge auxiliary usage to the active root token budget | 上下文压缩（`compact.go` 摘要请求用量） | 无需移植：本分支摘要请求已由 `generateCompressionSummary` 包在 `UsageRecorder` 里，以 `UsageSource.COMPRESSION` 记账；本分支没有 Reasonix 的 root token budget 概念，等价能力已具备 |
+| 2026-10-30 | — | 前缀缓存诊断（`cache_shape.go`） | 自锚点 `a534ead0a`（2026-09-23）后无改动，跳过 |
+
+`compact_retention.go` 自锚点 `e1c38d303`（2026-10-25）后无新提交；`context_budget.go` 最新为 `362c8381b`（2026-10-06），早于锚点，不涉及。
+
 ## 未引入（候选，不合并）
 
 以下内容在 Reasonix / DSH 中存在、但本分支**没有**引入，因此不随上游同步：
