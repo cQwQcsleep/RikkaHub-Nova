@@ -14,7 +14,7 @@
   <string name="about_page_author_upstream">原版作者</string>
   <string name="about_page_author_fork">分支维护</string>
   <string name="about_page_fork_diff_title">本分支与原版的区别</string>
-  <string name="about_page_fork_diff">• 提示词缓存诊断：记录每次请求的前缀（系统提示、工具声明、消息链），说明缓存未命中的原因与冷启动\n• 前缀更稳定：工具声明按名称排序，MCP 重连后顺序变化不再让厂商缓存失效\n• 性能：流式热路径去掉逐 token 的日志字符串与列表拷贝，图片/文档编码结果缓存，思维链与滚动动画不再每个 token 重启动画\n• 移除 Firebase：不再包含统计与崩溃上报，构建不需要 google-services.json</string>
+  <string name="about_page_fork_diff">• 提示词缓存诊断：记录每次请求的前缀（系统提示、工具声明、消息链），说明缓存未命中的原因与冷启动\n• 前缀更稳定：工具声明按名称排序，MCP 重连后顺序变化不再让厂商缓存失效\n• 上下文压缩：按 Reasonix 的做法引入自动压缩，用量越过阈值后插入总结并保留最近轮次，长对话继续在预算内运行\n• 性能：流式热路径去掉逐 token 的日志字符串与列表拷贝，流式分片按帧合并后再刷新 UI，图片/文档编码结果缓存，思维链与滚动动画不再每个 token 重启动画\n• 移除 Firebase：不再包含统计与崩溃上报，构建不需要 google-services.json</string>
   <string name="about_page_fork_note">Nova 是独立的第三方分支，分支相关的问题请反馈到分支仓库，而不是原版仓库。</string>
   <string name="add">添加</string>
   <string name="app_name">RikkaHub</string>
