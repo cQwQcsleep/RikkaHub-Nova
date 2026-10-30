@@ -202,12 +202,17 @@ private fun ReasoningContent(
             }
     ) {
         val reasoningContent = @Composable {
-            MarkdownBlock(
-                content = reasoning.reasoning.replaceRegexes(
+            // 正则替换结果按正文缓存：生成期间正文每帧变化，但无关状态重组（如时长刷新）
+            // 不应再跑一遍整段 replaceRegexes
+            val transformed = remember(reasoning.reasoning, assistant) {
+                reasoning.reasoning.replaceRegexes(
                     assistant = assistant,
                     scope = AssistantAffectScope.ASSISTANT,
                     visual = true,
-                ),
+                )
+            }
+            MarkdownBlock(
+                content = transformed,
                 style = reasoningTextStyle,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -233,7 +238,9 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
     collapsedAdaptiveWidth: Boolean = false,
 ) {
     val (state, loading) = rememberReasoningState(reasoning)
-    val thinkingTitle = reasoning.reasoning.extractThinkingTitle()
+    // 思考标题要从正文里扫出来，正文每帧都在变；按正文缓存，避免时长刷新（100ms 一次）
+    // 这种无关重组也重复扫描
+    val thinkingTitle = remember(reasoning.reasoning) { reasoning.reasoning.extractThinkingTitle() }
     val showThinkingTitle = loading && thinkingTitle != null
     val chatFontFamily = LocalTextStyle.current.fontFamily
 

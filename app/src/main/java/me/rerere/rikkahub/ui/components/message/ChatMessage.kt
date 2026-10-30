@@ -354,6 +354,9 @@ private fun MessagePartsBlock(
                         steps = block.steps,
                         collapsedVisibleCount = collapsedVisibleCount,
                         collapsedAdaptiveWidth = isReasoningOnlyBlock,
+                        // 流式生成时内容每帧都在长高，尺寸动画会不停重启动画并抖动；
+                        // 生成结束后恢复动画，折叠/展开仍有过渡
+                        animateContentSize = !loading,
                         cardColors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
                         ),

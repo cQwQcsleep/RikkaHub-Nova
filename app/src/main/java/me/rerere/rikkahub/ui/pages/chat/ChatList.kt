@@ -348,6 +348,8 @@ private fun ChatListNormal(
             itemsIndexed(
                 items = conversation.messageNodes,
                 key = { index, item -> item.id },
+                // 消息项与按钮/加载指示等条目分开复用，滚动时避免不同结构的 slot 反复重建
+                contentType = { _, _ -> "message" },
             ) { index, node ->
                 Column {
                     ListSelectableItem(
