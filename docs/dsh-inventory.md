@@ -23,13 +23,13 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 已引入，跟随 Reasonix 常量 |
+| 状态 | 已引入，跟随 Reasonix 逻辑；默认触发比例保留 0.85（见 2026-11-02 记录） |
 | 本分支文件 | `app/src/main/java/me/rerere/rikkahub/data/ai/ContextCompactionPolicy.kt`<br>`app/src/main/java/me/rerere/rikkahub/service/ChatService.kt`（`autoCompactIfNeeded` / `compressSession`）<br>`app/src/main/java/me/rerere/rikkahub/data/model/Assistant.kt`（`autoCompact`、`compactThresholdTokens`） |
 | 集成点 | `AssistantBasicPage.kt`（压缩设置分组与模型窗口行）、`CompressContextDialog.kt`（手动压缩面板）、`FilesPicker.kt`（压缩入口） |
 | 对外契约 | `ContextCompactionPolicy.TRIGGER_RATIO=0.85`、`RECENT_TAIL_BUDGET_RATIO=0.10`、`CHECKPOINT_CEILING_RATIO=0.50`、`TOKENS_PER_CHAR=0.25`、`MIN_THRESHOLD_TOKENS=1000`；`shouldCompact(...)`、`recentTailCount(...)`、`triggerTokens(...)` |
 | 本地化改造 | ① 纯计算对象，不触碰会话状态，便于 JVM 单测；② 自定义阈值需落在 `[1000, 窗口85%)`，否则由容量保护接管；③ 未声明窗口（`contextLength<=0`）不自动压缩；④ 压缩摘要复用与上一轮相同的前缀以命中提示词缓存；⑤ 面板文案与用量行对齐 Reasonix 布局 |
 | 上游锚点 | Reasonix `internal/runtime/agent/compact.go`、`compact_retention.go` @ `e1c38d3036`（2026-10-25）；常量可见 `context_budget.go` |
-| 本分支提交 | `13b56336`（引入策略）、`343243df`（设置 UI 对齐）、`1eec7af8`、`948571fc`（手动面板对齐） |
+| 本分支提交 | `13b56336`（引入策略）、`343243df`（设置 UI 对齐）、`1eec7af8`、`948571fc`（手动面板对齐）、`3710cef9`（同步 RikkaHub 保留条数手动输入） |
 
 ## 上游跟进记录（清单内）
 
@@ -37,6 +37,10 @@
 |---|---|---|---|
 | 2026-10-30 | `3baa8532b` fix(agent): charge auxiliary usage to the active root token budget | 上下文压缩（`compact.go` 摘要请求用量） | 无需移植：本分支摘要请求已由 `generateCompressionSummary` 包在 `UsageRecorder` 里，以 `UsageSource.COMPRESSION` 记账；本分支没有 Reasonix 的 root token budget 概念，等价能力已具备 |
 | 2026-10-30 | — | 前缀缓存诊断（`cache_shape.go`） | 自锚点 `a534ead0a`（2026-09-23）后无改动，跳过 |
+| 2026-11-02 | `7e1cdccb8` refactor(context): drop the soft compaction paths and default to 0.90 | 上下文压缩（`compact.go`） | 部分评估，**不跟进**：被移除的 soft-path / 失败诊断 / 保留消息裁切本分支从未引入；默认触发比例 0.85→0.90 属产品策略调整（会推迟压缩、抬高单次请求成本），不属修复或性能改进，保留 0.85 待人工确认 |
+| 2026-11-06 | RikkaHub `e85c1d90` feat(chat): 压缩对话时保留消息数支持手动输入 | 上下文压缩（集成点 `CompressContextDialog.kt`） | 已合并（`3710cef9`）：仅把固定 4 条改为可输入，不改变策略契约与阈值语义 |
+
+本轮（2026-11-06）无新增引入项，清单未扩充。
 
 `compact_retention.go` 自锚点 `e1c38d303`（2026-10-25）后无新提交；`context_budget.go` 最新为 `362c8381b`（2026-10-06），早于锚点，不涉及。
 
