@@ -3,10 +3,12 @@ package me.rerere.rikkahub.ui.pages.chat
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerState
@@ -90,6 +92,7 @@ import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
     val vm: ChatVM = koinViewModel(
@@ -179,7 +182,14 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
         }
     }
 
-    val chatListState = rememberLazyListState()
+    // 消息高度通常接近一屏，且 Markdown/思维链的解析成本较高。默认预取窗口只有视口的 10%，
+    // 快速滑动时下一屏内容往往还没准备好。把前向窗口扩到半屏、后向保留四分之一屏，
+    // 用内存换滚动时的准备时间（Compose Foundation 1.12 的 LazyLayoutCacheWindow）。
+    val chatListState = rememberLazyListState(
+        cacheWindow = remember {
+            LazyLayoutCacheWindow(aheadFraction = 0.5f, behindFraction = 0.25f)
+        }
+    )
     LaunchedEffect(nodeId, conversation.messageNodes.size) {
         if (!vm.chatListInitialized && conversation.messageNodes.isNotEmpty()) {
             if (nodeId != null) {

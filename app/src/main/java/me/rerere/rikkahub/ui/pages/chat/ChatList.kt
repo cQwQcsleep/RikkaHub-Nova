@@ -95,6 +95,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
+import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
@@ -348,10 +349,25 @@ private fun ChatListNormal(
             itemsIndexed(
                 items = conversation.messageNodes,
                 key = { index, item -> item.id },
-                // 消息项与按钮/加载指示等条目分开复用，滚动时避免不同结构的 slot 反复重建
-                contentType = { _, _ -> "message" },
+                // 消息项与按钮/加载指示等条目分开复用，滚动时避免不同结构的 slot 反复重建。
+                // 用户消息与助手消息的子结构差异最大，再按 role 细分，可让 LazyList 在两者之间
+                // 复用各自最匹配的 slot。
+                contentType = { _, node ->
+                    when (node.currentMessage.role) {
+                        MessageRole.USER -> "message-user"
+                        MessageRole.ASSISTANT -> "message-assistant"
+                        else -> "message-other"
+                    }
+                },
             ) { index, node ->
-                Column {
+                Column(
+                    // 只做淡入淡出，不做 placement：流式输出时消息高度持续变化，位置动画会放大抖动
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                        placementSpec = null,
+                        fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                    )
+                ) {
                     ListSelectableItem(
                         key = node.id,
                         onSelectChange = {
@@ -406,18 +422,32 @@ private fun ChatListNormal(
             }
 
             if (!loading && assistant?.allowConversationSystemPrompt == true && onConversationSystemPromptChange != null) {
-                item(key = "ConversationSystemPrompt") {
-                    ConversationSystemPromptButton(
-                        customSystemPrompt = conversation.customSystemPrompt,
-                        onSystemPromptChange = onConversationSystemPromptChange,
-                    )
+                item(key = "ConversationSystemPrompt", contentType = "system-prompt") {
+                    Box(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                            placementSpec = null,
+                            fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                        )
+                    ) {
+                        ConversationSystemPromptButton(
+                            customSystemPrompt = conversation.customSystemPrompt,
+                            onSystemPromptChange = onConversationSystemPromptChange,
+                        )
+                    }
                 }
             }
 
             if (loading) {
-                item(LoadingIndicatorKey) {
+                item(key = LoadingIndicatorKey, contentType = "loading") {
                     Row(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier
+                            .animateItem(
+                                fadeInSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                placementSpec = null,
+                                fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                            )
+                            .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -438,7 +468,7 @@ private fun ChatListNormal(
             }
 
             // 为了能正确滚动到这
-            item(ScrollBottomKey) {
+            item(ScrollBottomKey, contentType = "spacer") {
                 Spacer(
                     Modifier
                         .fillMaxWidth()
