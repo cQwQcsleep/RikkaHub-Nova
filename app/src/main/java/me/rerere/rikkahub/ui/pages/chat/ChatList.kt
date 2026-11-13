@@ -680,7 +680,11 @@ private fun ChatListPreview(
     // conflate 掉中间状态，只处理最新的节点列表
     val nodes by rememberUpdatedState(conversation.messageNodes)
     val query by rememberUpdatedState(searchQuery)
-    val loadedMessages by produceState<List<Pair<Int, MessageNode>>?>(initialValue = null) {
+    // 首帧先用当前节点做一次纯索引映射（不提取正文），避免概览打开时闪一下空白
+    val initialMessages = remember(conversation.id) {
+        conversation.messageNodes.mapIndexed { index, node -> index to node }
+    }
+    val loadedMessages by produceState(initialValue = initialMessages) {
         snapshotFlow { nodes to query }
             .conflate()
             .collect { (latestNodes, latestQuery) ->
