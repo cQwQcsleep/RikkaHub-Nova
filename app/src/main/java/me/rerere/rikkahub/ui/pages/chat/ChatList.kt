@@ -59,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -92,9 +93,11 @@ import androidx.compose.ui.zIndex
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.R
@@ -117,6 +120,9 @@ import kotlin.uuid.Uuid
 private const val TAG = "ChatList"
 private const val LoadingIndicatorKey = "LoadingIndicator"
 private const val ScrollBottomKey = "ScrollBottomKey"
+
+// 概览卡片只显示一行，但 Text 会把整段文字排版完才能截断；长回复先截到够用的长度
+private const val PreviewSnippetMaxLength = 300
 
 @Composable
 fun ChatList(
@@ -670,15 +676,28 @@ private fun ChatListPreview(
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
-    // 过滤消息，同时保留原始 index 避免后续 O(n) indexOf 查找
-    val filteredMessages = remember(conversation.messageNodes, searchQuery) {
-        if (searchQuery.isBlank()) {
-            conversation.messageNodes.mapIndexed { index, node -> index to node }
-        } else {
-            conversation.messageNodes.mapIndexed { index, node -> index to node }
-                .filter { (_, node) -> node.currentMessage.toText().contains(searchQuery, ignoreCase = true) }
-        }
+    // 长对话里逐条提取正文并做忽略大小写匹配很慢，放到后台算；生成中节点每个快照都在变，
+    // conflate 掉中间状态，只处理最新的节点列表
+    val nodes by rememberUpdatedState(conversation.messageNodes)
+    val query by rememberUpdatedState(searchQuery)
+    val loadedMessages by produceState<List<Pair<Int, MessageNode>>?>(initialValue = null) {
+        snapshotFlow { nodes to query }
+            .conflate()
+            .collect { (latestNodes, latestQuery) ->
+                value = withContext(Dispatchers.Default) {
+                    val indexed = latestNodes.mapIndexed { index, node -> index to node }
+                    if (latestQuery.isBlank()) {
+                        indexed
+                    } else {
+                        indexed.filter { (_, node) ->
+                            node.currentMessage.toText().contains(latestQuery, ignoreCase = true)
+                        }
+                    }
+                }
+            }
     }
+    // 首帧结果是后台算出来的，此时先按空列表显示，避免在主线程同步跑一遍全量过滤
+    val filteredMessages = loadedMessages.orEmpty()
 
     Column(
         modifier = Modifier
@@ -733,6 +752,12 @@ private fun ChatListPreview(
                 val isUser = message.role == me.rerere.ai.core.MessageRole.USER
                 Column(
                     modifier = Modifier
+                        // 搜索过滤会增删卡片，用淡入淡出而不是直接替换
+                        .animateItem(
+                            fadeInSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                            placementSpec = null,
+                            fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                        )
                         .fillMaxWidth()
                         .then(
                             if (!isUser) Modifier.padding(end = 24.dp) else Modifier
@@ -758,7 +783,7 @@ private fun ChatListPreview(
                                 val messageText = extractMatchingSnippet(
                                     text = fullText,
                                     query = searchQuery
-                                )
+                                ).take(PreviewSnippetMaxLength)
                                 buildHighlightedText(
                                     text = messageText,
                                     query = searchQuery,
