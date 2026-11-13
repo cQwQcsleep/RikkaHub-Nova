@@ -700,8 +700,7 @@ private fun ChatListPreview(
                 }
             }
     }
-    // 首帧结果是后台算出来的，此时先按空列表显示，避免在主线程同步跑一遍全量过滤
-    val filteredMessages = loadedMessages.orEmpty()
+    val filteredMessages = loadedMessages
 
     Column(
         modifier = Modifier
