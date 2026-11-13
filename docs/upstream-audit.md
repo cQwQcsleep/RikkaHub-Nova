@@ -226,9 +226,14 @@
 
 设备级帧率、卡顿率、CPU 与功耗数值仍无法在本沙箱采集；本轮不填估算值，留待 CI 真机或人工复测。
 
-## 12. 验证与发布
+## 12. 验证与发布（已完成）
 
 - JVM：新增 `AgentLoopTest` 用例锁定 50ms 窗口；Claude/Mistral 上游测试随提交带入。
-- 编译：由 GitHub Actions `nova-ci.yml` 在 `port-3.2.0` PR 与并入后的 `master` 上执行。
-- 设备：本环境无 Android SDK/设备，Layout Inspector、Macrobenchmark、动画走查未执行；
-  发布说明中不声称设备指标。
+- CI：`Nova CI #43335437553`（merge commit）与 `#43337813811`（注释修正）均通过
+  `:ai` / `:app` 单测与 `assembleGithubDebug`。
+- 发布：`Nova Release #43336408939` 成功，tag `v3.1.1-nova.10`，commit `1b9a84aa`，
+  Release: https://github.com/cQwQcsleep/RikkaHub-Nova/releases/tag/v3.1.1-nova.10
+- 设备：本环境无 Android SDK/设备，Layout Inspector、Macrobenchmark、CPU 采样、动画走查未执行；
+  发布说明未声称设备指标。
+- 仓库 Description：`gh repo edit` 返回 HTTP 403（令牌无 admin 权限），未更新成功；
+  README 与应用内“关于”已同步，Description 待有权限账号手动更新。
