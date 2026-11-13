@@ -385,6 +385,23 @@ class AgentLoopTest {
         assertEquals(listOf("ab"), events.finished().message.texts())
     }
 
+    // 50ms 合并窗口：1 秒、每 5ms 一个分片，快照次数应约为 20 次，而不是 200 次
+    @Test
+    fun `stream previews are coalesced into one snapshot per window`() = runTest {
+        provider.stream {
+            emit(StreamChunk.TextStart("text"))
+            repeat(200) { index ->
+                emit(StreamChunk.TextDelta("text", index.toString()))
+                delay(5)
+            }
+            emit(StreamChunk.Finish())
+        }
+
+        val previews = runToEnd().filterIsInstance<AgentEvent.MessageUpdated>().dropLast(1)
+
+        assertTrue("expected batched previews, got ${previews.size}", previews.size in 10..22)
+    }
+
     @Test
     fun `preview output is only emitted and never merged back into the step`() = runTest {
         val previewHooks = object : AgentHooks by hooks {

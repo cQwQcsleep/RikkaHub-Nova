@@ -23,7 +23,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 已引入，跟随 Reasonix 逻辑；默认触发比例保留 0.85（见 2026-11-02 记录） |
+| 状态 | 已引入（摘要检查点 + 保留尾部）；**上游已偏离，待迁移**（Reasonix 改为 archive fold，见 2026-11-13 记录）；默认触发比例保留 0.85 |
 | 本分支文件 | `app/src/main/java/me/rerere/rikkahub/data/ai/ContextCompactionPolicy.kt`<br>`app/src/main/java/me/rerere/rikkahub/service/ChatService.kt`（`autoCompactIfNeeded` / `compressSession`）<br>`app/src/main/java/me/rerere/rikkahub/data/model/Assistant.kt`（`autoCompact`、`compactThresholdTokens`） |
 | 集成点 | `AssistantBasicPage.kt`（压缩设置分组与模型窗口行）、`CompressContextDialog.kt`（手动压缩面板）、`FilesPicker.kt`（压缩入口） |
 | 对外契约 | `ContextCompactionPolicy.TRIGGER_RATIO=0.85`、`RECENT_TAIL_BUDGET_RATIO=0.10`、`CHECKPOINT_CEILING_RATIO=0.50`、`TOKENS_PER_CHAR=0.25`、`MIN_THRESHOLD_TOKENS=1000`；`shouldCompact(...)`、`recentTailCount(...)`、`triggerTokens(...)` |
@@ -39,10 +39,21 @@
 | 2026-10-30 | — | 前缀缓存诊断（`cache_shape.go`） | 自锚点 `a534ead0a`（2026-09-23）后无改动，跳过 |
 | 2026-11-02 | `7e1cdccb8` refactor(context): drop the soft compaction paths and default to 0.90 | 上下文压缩（`compact.go`） | 部分评估，**不跟进**：被移除的 soft-path / 失败诊断 / 保留消息裁切本分支从未引入；默认触发比例 0.85→0.90 属产品策略调整（会推迟压缩、抬高单次请求成本），不属修复或性能改进，保留 0.85 待人工确认 |
 | 2026-11-06 | RikkaHub `e85c1d90` feat(chat): 压缩对话时保留消息数支持手动输入 | 上下文压缩（集成点 `CompressContextDialog.kt`） | 已合并（`3710cef9`）：仅把固定 4 条改为可输入，不改变策略契约与阈值语义 |
+| 2026-11-06 | Reasonix `76ed2566ed` feat(context): a fold archives the whole span and keeps nothing | 上下文压缩（规则、保留策略、摘要） | **不跟进，标记“上游已偏离，待迁移”**：移除首轮钉住、最近尾部、保留用户轮次、摘要与 work index，改为把整段折叠进 `<session>.outputs/fold-<hash>.md`，只留一条指针让模型 `read_file` 读回。与本分支“摘要检查点 + 最近尾部 + 助手级阈值”契约不兼容，不能与功能/性能改动混在同一提交 |
+| 2026-11-06 | Reasonix `1b8b56aa65` feat(studio): compaction archives earlier turns to a file instead of summarizing | 上下文压缩（摘要请求、失败重试、边界、UI 面板） | **不跟进**：删除 summarizer 路径及其重试/边界/测试，属于同一 archive fold 迁移；桌面端压缩面板不在本分支引入范围 |
+| 2026-11-12 | RikkaHub `0cd90ef1` / `bcc649ab` 自动压缩改为全局比例触发 + 轮中压缩 | 上下文压缩（RikkaHub 侧集成） | **暂缓，单独评估**：本分支自动压缩是助手级 `autoCompact` + 声明阈值；上游改为通用偏好全局比例与任务槽。仅合并了其中无关性质的“压缩请求组装移到 IO 协程”（`cb9a0338`），触发/任务槽/轮中压缩不合并，避免与 DSH 策略形成双触发 |
 
-本轮（2026-11-06）无新增引入项，清单未扩充。
+本轮（2026-11-13）无新增引入项，清单未扩充。
 
-`compact_retention.go` 自锚点 `e1c38d303`（2026-10-25）后无新提交；`context_budget.go` 最新为 `362c8381b`（2026-10-06），早于锚点，不涉及。
+`cache_shape.go` 自锚点 `a534ead0a`（2026-09-24）后无新提交，前缀缓存诊断无需同步。
+`compact_retention.go` 在 `e1c38d303` 之后只有 `76ed2566ed` 一次删除性重构，已在上表记录；`context_budget.go` 最新为 `362c8381b`（2026-10-06），早于锚点，不涉及。
+
+### 待迁移说明（archive fold）
+
+- **迁移成本**：需要在 Android 侧建立可被模型读回的会话产物目录与 `read_file` 工具契约；重写压缩提示、检查点格式与恢复路径；旧摘要检查点需要兼容读取或一次性迁移。
+- **影响面**：`ChatService.compressSession`、`Assistant` 压缩设置、`CompressContextDialog`、提示词缓存前缀计算、会话导出/备份。
+- **回退风险**：现有摘要检查点、最近尾部保留、手动压缩面板都会失效；在端侧文件权限与清理策略未验证前强行跟进，可能造成上下文丢失。
+- **结论**：本轮保留旧实现，不强行跟进；待有独立迁移轮次并具备设备验证条件后再做。
 
 ## 未引入（候选，不合并）
 
@@ -57,9 +68,10 @@
 
 ## 本分支自有、不属 DSH（仅备查）
 
-- 流式热路径合并器 `ai/.../ui/StreamingMessageAccumulator.kt`、`AgentLoop`/`Agent` 的按帧快照；
-- 图片/文档编码缓存 `ai/.../util/FileEncoder.kt`、`DocumentAsPromptTransformer`；
+- 流式热路径合并器 `ai/.../ui/StreamingMessageAccumulator.kt`、`AgentLoop` 的 50ms 合并窗口与空窗口跳过（2026-11-13 起，替代按帧快照）；
+- 图片/文档编码缓存 `ai/.../util/FileEncoder.kt`、`DocumentAsPromptTransformer`；内存 L1（2026-10 引入）叠加 RikkaHub 磁盘 L2（2026-11-13 移植）；
 - 缓存稳定前缀（工具排序，见第 1 节集成点）；
+- 对话概览后台预过滤与长文本截断（`ChatList.kt`，2026-11-13）；
 - 动画/滚动/背景等 UI 优化（`ChatMessageReasoning.kt`、`ChatList.kt`、`MeshGradientBackground.kt`）。
 
 这些是 Nova 的差异化价值，不属于 DSH 同步范围，也不以“同步上游”名义回退。

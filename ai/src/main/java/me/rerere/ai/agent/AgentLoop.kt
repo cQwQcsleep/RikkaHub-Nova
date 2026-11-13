@@ -28,8 +28,9 @@ import kotlin.time.TimeSource
 // 输出为空的工具会被当成没执行过，之后每一步都会再执行一次，所以换成占位文本
 private const val EMPTY_TOOL_OUTPUT = "(no output)"
 
-// 流式快照的最小间隔，约一帧；显示更快的快照没有意义，只会增加拷贝
-private const val FRAME_INTERVAL_MS = 16L
+// 流式快照的合并窗口。逐 token 刷新时每秒会产生几十次整条消息拷贝与 Compose 重组，
+// 20 次/秒（50ms）已经足够看出打字效果，同时把快照与重组上限压到原来的三分之一
+private const val STREAM_PREVIEW_INTERVAL_MS = 50L
 
 private class StreamChunkHandlingException(override val cause: Throwable) : RuntimeException(cause)
 
@@ -122,13 +123,16 @@ internal class AgentLoop(
                 var attempt = stepStart
                 var firstChunk: TimeMark? = null
                 coroutineScope {
-                    // 快照与预览按显示帧节流：分片只做累积，300–1000 token/s 时每秒最多 60 次
-                    // 消息拷贝，而不是每个 token 复制一遍已有正文
+                    // 快照与预览按固定窗口合并：分片只做累积，50ms 内到达的多个 token 只构建一次
+                    // 不可变消息；没有新分片的窗口直接跳过，网络暂停时也不反复复制同一份内容
+                    var lastBuiltRevision = -1L
                     val ticker = launch {
                         while (isActive) {
-                            delay(FRAME_INTERVAL_MS)
-                            // 还没收到任何分片时没有可展示的新内容
-                            if (firstChunk == null) continue
+                            delay(STREAM_PREVIEW_INTERVAL_MS)
+                            val revision = accumulator.revision
+                            // 还没收到任何分片，或这个窗口内没有新内容
+                            if (firstChunk == null || revision == lastBuiltRevision) continue
+                            lastBuiltRevision = revision
                             try {
                                 attempt = accumulator.build(stepStart)
                                 preview(

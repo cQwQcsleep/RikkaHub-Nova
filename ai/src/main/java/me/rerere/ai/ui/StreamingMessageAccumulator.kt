@@ -112,8 +112,16 @@ class StreamingMessageAccumulator(private val model: Model? = null) {
     private var usage: TokenUsage? = null
     private var finishedAt: kotlinx.datetime.LocalDateTime? = null
 
+    /**
+     * 已累计的分片数。快照定时器据此跳过“这一窗口内没有新内容”的构建，
+     * 网络暂停或等待工具结果时不再反复复制同一份消息。
+     */
+    var revision: Long = 0L
+        private set
+
     /** 累积一个分片；不生成不可变对象，除工具参数外不产生与已生成正文等长的拷贝 */
     fun consume(chunk: StreamChunk) {
+        revision++
         when (chunk) {
             is StreamChunk.TextStart -> {
                 if (chunk.id !in textIndexes) {
